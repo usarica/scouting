@@ -52,6 +52,9 @@ def make_branch(name, tstr="vi"):
     if tstr == "f":
         obj = array.array("f",[999])
         extra.append("{}/f".format(name))
+    if tstr == "b":
+        obj = array.array("b",[0])
+        extra.append("{}/O".format(name))
     if tstr == "i":
         obj = array.array("I",[999])
         extra.append("{}/I".format(name))
@@ -75,6 +78,8 @@ make_branch("MET_pt", "f")
 make_branch("MET_phi", "f")
 make_branch("rho", "f")
 make_branch("LeadingPair_mass", "f")
+make_branch("LeadingPair_sameVtx", "b")
+make_branch("LeadingPair_isOS", "b")
 
 make_branch("DV_x","vf")
 make_branch("DV_y","vf")
@@ -227,11 +232,6 @@ for evt in ch:
             if k.startswith("Jet_"):
                 branches[k].push_back(getattr(jet,k.replace("Jet_",""))())
 
-    branches["LeadingPair_mass"][0] = 0.
-    if len(muons) >= 2:
-        v1.SetPtEtaPhiM(muons[0].pt(), muons[0].eta(), muons[0].phi(), muons[0].m())
-        v2.SetPtEtaPhiM(muons[1].pt(), muons[1].eta(), muons[1].phi(), muons[1].m())
-        branches["LeadingPair_mass"][0] = (v1+v2).M()
 
     for muon in muons:
         for k in branches:
@@ -259,6 +259,17 @@ for evt in ch:
         else: branches["Muon_vtxIndx4"].push_back(-1)
         if num > 4: branches["Muon_vtxIndx5"].push_back(indices[4])
         else: branches["Muon_vtxIndx5"].push_back(-1)
+
+    if len(muons) >= 2:
+        v1.SetPtEtaPhiM(muons[0].pt(), muons[0].eta(), muons[0].phi(), muons[0].m())
+        v2.SetPtEtaPhiM(muons[1].pt(), muons[1].eta(), muons[1].phi(), muons[1].m())
+        branches["LeadingPair_mass"][0] = (v1+v2).M()
+        branches["LeadingPair_sameVtx"][0] = (branches["Muon_vtxNum"][0]>0) and (branches["Muon_vtxNum"][1]>0) and (branches["Muon_vtxIndx1"][0] == branches["Muon_vtxIndx1"][1])
+        branches["LeadingPair_isOS"][0] = (branches["Muon_charge"][0] == -branches["Muon_charge"][1])
+    else:
+        branches["LeadingPair_mass"][0] = 0.
+        branches["LeadingPair_sameVtx"][0] = False
+        branches["LeadingPair_isOS"][0] = False
 
     newtree.Fill()
 t1 = time.time()

@@ -11,12 +11,18 @@ import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument("fnames", help="input file(s)", nargs="*")
+parser.add_argument("-o", "--output", help="output file name", default="output.root", type=str)
 parser.add_argument("-n", "--nevents", help="max number of events to process (-1 = all)", default=-1, type=int)
 parser.add_argument("-e", "--expected", help="expected number of events", default=-1, type=int)
+parser.add_argument("-c", "--compression", help="compression algo (101, 404, 207, ...)", default=-1, type=int)
+parser.add_argument("-b", "--basketsize", help="basket size in kb", default=128, type=int)
 args = parser.parse_args()
 nevents = args.nevents
 fnames = sum(map(lambda x:x.split(","),args.fnames),[])
-print fnames
+print(fnames)
+if not fnames:
+    print("wtf")
+    sys.exit()
 def xrootdify(fname):
     if fname.startswith("/store"):
         fname = "root://cmsxrootd.fnal.gov/" + fname
@@ -24,31 +30,37 @@ def xrootdify(fname):
 fnames = map(xrootdify,fnames)
 
 treename = "Events"
-fname_out = "output.root" 
+fname_out = args.output
+
+pfstream = any("ScoutingPF" in fname for fname in fnames)
+if pfstream:
+    print("This is a PFStream dataset, so some things will be a little different")
 
 ch = r.TChain(treename)
 for fname in fnames:
     ch.Add(fname)
-ch.SetBranchStatus("ScoutingTracks_hltScoutingTrackPacker__HLT.*",0)
+
 ch.SetBranchStatus("FEDRawDataCollection_hltFEDSelectorL1__HLT.*",0)
 ch.SetBranchStatus("edmTriggerResults_TriggerResults__HLT.*",0)
+if pfstream:
+    ch.SetBranchStatus("ScoutingParticles_hltScoutingPFPacker__HLT.*",0)
+else:
+    ch.SetBranchStatus("ScoutingTracks_hltScoutingTrackPacker__HLT.*",0)
 
 
 newfile = r.TFile(fname_out, "recreate")
+if args.compression > 0:
+    newfile.SetCompressionSettings(int(args.compression))
 newtree = r.TTree(treename,"")
 
 branches = {}
 def make_branch(name, tstr="vi"):
     global branches
     extra = []
-    if tstr == "vvi":
-        obj = r.vector("vector<int>")()
-    if tstr == "vi":
-        obj = r.vector("int")()
-    if tstr == "vf":
-        obj = r.vector("float")()
-    if tstr == "vb":
-        obj = r.vector("bool")()
+    if tstr == "vvi": obj = r.vector("vector<int>")()
+    if tstr == "vi": obj = r.vector("int")()
+    if tstr == "vf": obj = r.vector("float")()
+    if tstr == "vb": obj = r.vector("bool")()
     if tstr == "f":
         obj = array.array("f",[999])
         extra.append("{}/f".format(name))
@@ -169,7 +181,22 @@ make_branch("Muon_vtxIndx3","vi")
 make_branch("Muon_vtxIndx4","vi")
 make_branch("Muon_vtxIndx5","vi")
 
-newtree.SetBasketSize("*",128000)
+make_branch("GenPart_pt", "vf")
+make_branch("GenPart_eta", "vf")
+make_branch("GenPart_phi", "vf")
+make_branch("GenPart_m", "vf")
+make_branch("GenPart_vx", "vf")
+make_branch("GenPart_vy", "vf")
+make_branch("GenPart_vz", "vf")
+make_branch("GenPart_status", "vi")
+make_branch("GenPart_pdgId", "vi")
+make_branch("GenPart_motherId", "vi")
+
+make_branch("Gen_nMuFromZ", "i")
+
+if args.basketsize > 0:
+    newtree.SetBasketSize("*",int(args.basketsize*1000))
+
 
 v1 = r.TLorentzVector()
 v2 = r.TLorentzVector()
@@ -177,27 +204,41 @@ v2 = r.TLorentzVector()
 ievt = 0
 # for ievt, evt in enumerate(tqdm(ch,total=ch.GetEntries())):
 # for ievt, evt in enumerate(t):
-print ">>> Started slimming/skimming tree"
+print(">>> Started slimming/skimming tree")
 t0 = time.time()
 for evt in ch:
     if ievt % 10000 == 0:
-        print ievt
+        print(ievt)
     if (nevents > 0) and (ievt > nevents): break
     ievt += 1
 
-    dvs = evt.ScoutingVertexs_hltScoutingMuonPackerCalo_displacedVtx_HLT.product()
-    nDV = dvs.size()
-    if nDV < 1: continue
+    if pfstream:
+        dvs = evt.ScoutingVertexs_hltScoutingMuonPacker_displacedVtx_HLT.product()
+        nDV = dvs.size()
+        if nDV < 1: continue
 
-    muons = evt.ScoutingMuons_hltScoutingMuonPackerCalo__HLT.product()
-    nMuons = muons.size()
-    if nMuons < 2: continue
+        muons = evt.ScoutingMuons_hltScoutingMuonPacker__HLT.product()
+        nMuons = muons.size()
+        if nMuons < 2: continue
 
-    jets = evt.ScoutingCaloJets_hltScoutingCaloPacker__HLT.product()
-    nJet = muons.size()
+        jets = evt.ScoutingPFJets_hltScoutingPFPacker__HLT.product()
 
-    pvs = evt.ScoutingVertexs_hltScoutingPrimaryVertexPacker_primaryVtx_HLT.product()
-    pvms = evt.ScoutingVertexs_hltScoutingPrimaryVertexPackerCaloMuon_primaryVtx_HLT.product()
+        pvs = evt.ScoutingVertexs_hltScoutingPrimaryVertexPacker_primaryVtx_HLT.product()
+        pvmfs = []
+    else:
+        dvs = evt.ScoutingVertexs_hltScoutingMuonPackerCalo_displacedVtx_HLT.product()
+        if not dvs: continue # NOTE sometimes there's no collection at all??
+        nDV = dvs.size()
+        if nDV < 1: continue
+
+        muons = evt.ScoutingMuons_hltScoutingMuonPackerCalo__HLT.product()
+        nMuons = muons.size()
+        if nMuons < 2: continue
+
+        jets = evt.ScoutingCaloJets_hltScoutingCaloPacker__HLT.product()
+
+        pvs = evt.ScoutingVertexs_hltScoutingPrimaryVertexPacker_primaryVtx_HLT.product()
+        pvms = evt.ScoutingVertexs_hltScoutingPrimaryVertexPackerCaloMuon_primaryVtx_HLT.product()
 
     clear_branches()
 
@@ -213,9 +254,6 @@ for evt in ch:
         for k in branches:
             if k.startswith("DV_"):
                 branches[k].push_back(getattr(dv,k.replace("DV_",""))())
-        # branches["DV_x"].push_back(dv.x())
-        # branches["DV_y"].push_back(dv.y())
-        # branches["DV_z"].push_back(dv.z())
 
     for pv in pvs:
         for k in branches:
@@ -232,6 +270,29 @@ for evt in ch:
             if k.startswith("Jet_"):
                 branches[k].push_back(getattr(jet,k.replace("Jet_",""))())
 
+    try:
+        genparts = list(evt.recoGenParticles_genParticles__HLT.product())
+    except:
+        genparts = []
+    nMuFromZ = 0
+    for genpart in genparts:
+        pdgid = genpart.pdgId()
+        if abs(pdgid) not in [13,23,25]: continue
+        motheridx = genpart.motherRef().index()
+        mother = genparts[motheridx]
+        motherid = mother.pdgId()
+        branches["GenPart_pt"].push_back(genpart.pt())
+        branches["GenPart_eta"].push_back(genpart.eta())
+        branches["GenPart_phi"].push_back(genpart.phi())
+        branches["GenPart_m"].push_back(genpart.mass())
+        branches["GenPart_vx"].push_back(genpart.vx())
+        branches["GenPart_vy"].push_back(genpart.vy())
+        branches["GenPart_vz"].push_back(genpart.vz())
+        branches["GenPart_status"].push_back(genpart.status())
+        branches["GenPart_pdgId"].push_back(pdgid)
+        branches["GenPart_motherId"].push_back(motherid)
+        if (motherid == 23) and (abs(pdgid)==13): nMuFromZ += 1
+    branches["Gen_nMuFromZ"][0] = nMuFromZ
 
     for muon in muons:
         for k in branches:
@@ -274,11 +335,11 @@ for evt in ch:
     newtree.Fill()
 t1 = time.time()
 
-print ">>> Finished slim/skim of {} events in {:.2f} seconds @ {:.1f}Hz".format(ievt,(t1-t0),ievt/(t1-t0))
-print ">>> Output tree has size {:.1f}MB and {} events".format(os.stat(fname_out).st_size/1e6,newtree.GetEntries())
+print(">>> Finished slim/skim of {} events in {:.2f} seconds @ {:.1f}Hz".format(ievt,(t1-t0),ievt/(t1-t0)))
+print(">>> Output tree has size {:.1f}MB and {} events".format(os.stat(fname_out).st_size/1e6,newtree.GetEntries()))
 
 if args.expected > 0:
-    print "Expected {} events and ran on {}".format(args.expected,ievt)
+    print("Expected {} events and ran on {}".format(args.expected,ievt))
     # FIXME do we delete if they don't match?
 
 

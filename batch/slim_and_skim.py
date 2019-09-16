@@ -16,8 +16,10 @@ parser.add_argument("-n", "--nevents", help="max number of events to process (-1
 parser.add_argument("-e", "--expected", help="expected number of events", default=-1, type=int)
 parser.add_argument("-c", "--compression", help="compression algo (101, 404, 207, ...)", default=-1, type=int)
 parser.add_argument("-b", "--basketsize", help="basket size in kb", default=128, type=int)
+parser.add_argument("-a", "--allevents", help="don't skim nDV>=1 && nMuon>=2", action="store_true")
 args = parser.parse_args()
 nevents = args.nevents
+do_skim = not args.allevents
 fnames = sum(map(lambda x:x.split(","),args.fnames),[])
 print(fnames)
 if not fnames:
@@ -46,6 +48,11 @@ if pfstream:
     ch.SetBranchStatus("ScoutingParticles_hltScoutingPFPacker__HLT.*",0)
 else:
     ch.SetBranchStatus("ScoutingTracks_hltScoutingTrackPacker__HLT.*",0)
+    ch.SetBranchStatus("*triggerTriggerEvent*",0)
+    ch.SetBranchStatus("*hltScoutingPFPacker*",0)
+    ch.SetBranchStatus("*addPileupInfo*",0)
+    ch.SetBranchStatus("*recoGenJets*",0)
+    # NOTE 440Hz with custom slimmed RAW format. can improve by simplying turning off more stuff that we don't need.
 
 
 newfile = r.TFile(fname_out, "recreate")
@@ -207,7 +214,7 @@ ievt = 0
 print(">>> Started slimming/skimming tree")
 t0 = time.time()
 for evt in ch:
-    if ievt % 10000 == 0:
+    if ievt % 2000 == 0:
         print(ievt)
     if (nevents > 0) and (ievt > nevents): break
     ievt += 1
@@ -226,14 +233,20 @@ for evt in ch:
         pvs = evt.ScoutingVertexs_hltScoutingPrimaryVertexPacker_primaryVtx_HLT.product()
         pvmfs = []
     else:
+
         dvs = evt.ScoutingVertexs_hltScoutingMuonPackerCalo_displacedVtx_HLT.product()
-        if not dvs: continue # NOTE sometimes there's no collection at all??
-        nDV = dvs.size()
-        if nDV < 1: continue
+        if not dvs:
+            dvs = []
+            nDV = 0
+        else:
+            nDV = dvs.size()
 
         muons = evt.ScoutingMuons_hltScoutingMuonPackerCalo__HLT.product()
         nMuons = muons.size()
-        if nMuons < 2: continue
+
+        if do_skim:
+            if nDV < 1: continue
+            if nMuons < 2: continue
 
         jets = evt.ScoutingCaloJets_hltScoutingCaloPacker__HLT.product()
 

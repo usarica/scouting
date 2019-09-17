@@ -133,7 +133,7 @@ chirp ChirpMetisExpectedNevents $EXPECTEDNEVTS
 
 chirp ChirpMetisStatus "before_cmsRun"
 
-python pset.py $INPUTFILENAMES --expected $EXPECTEDNEVTS
+python pset.py $INPUTFILENAMES --expected $EXPECTEDNEVTS --output ${OUTPUTNAME}.root
 CMSRUN_STATUS=$?
 
 chirp ChirpMetisStatus "after_cmsRun"

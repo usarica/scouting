@@ -12,43 +12,11 @@ import os
 branches = {}
 
 def xrootdify(fname):
+    if "/namin/" in fname:
+        fname = "root://redirector.t2.ucsd.edu/" + fname.replace("/hadoop/cms","")
     if fname.startswith("/store"):
         fname = "root://cmsxrootd.fnal.gov/" + fname
     return fname
-
-def initial_slim_skim(
-        fnames = [],
-        treename = "Events",
-        cut_str = "(ScoutingVertexs_hltScoutingMuonPackerCalo_displacedVtx_HLT.obj@.size()>=1) && (ScoutingMuons_hltScoutingMuonPackerCalo__HLT.obj@.size()>=2)",
-        output = "initial.root",
-        expected = 0,
-        ):
-
-    ch = r.TChain(treename)
-    for fname in fnames:
-        ch.Add(fname)
-    ch.SetBranchStatus("ScoutingTracks_hltScoutingTrackPacker__HLT.*",0)
-    ch.SetBranchStatus("FEDRawDataCollection_hltFEDSelectorL1__HLT.*",0)
-    ch.SetBranchStatus("edmTriggerResults_TriggerResults__HLT.*",0)
-    t0 = time.time()
-    new_file = r.TFile(output,"RECREATE") 
-    neventsin = ch.GetEntries()
-    print(">>> Started making an initial slimmed/skimmed tree with {} events".format(neventsin))
-    ch_new = ch.CopyTree(cut_str)
-    t1 = time.time()
-    print(">>> Finished initial slim/skim in {:.2f} seconds".format(t1-t0))
-    neventsout = ch_new.GetEntries()
-    ch_new.GetCurrentFile().Write() 
-    ch_new.GetCurrentFile().Close()
-    new_file.Close()
-    del ch
-    del ch_new
-    del new_file
-    if (expected > 0) and (int(expected) != neventsin):
-        print(">>> In initial pass, expected {} events but had {} in the chain. Deleting the output.".format(expected,neventsin))
-        os.system("rm {}".format(output))
-    return neventsin,neventsout
-
 
 def main():
 
@@ -60,7 +28,6 @@ def main():
     parser.add_argument("-c", "--compression", help="compression algo (101, 404, 207, ...)", default=-1, type=int)
     parser.add_argument("-b", "--basketsize", help="basket size in kb", default=128, type=int)
     parser.add_argument("-a", "--allevents", help="don't skim nDV>=1 && nMuon>=2", action="store_true")
-    parser.add_argument("-i", "--initialpass", help="do an initial slim/skim into a file before proceeding", action="store_true")
     args = parser.parse_args()
     nevents = args.nevents
     do_skim = not args.allevents
@@ -68,20 +35,11 @@ def main():
     fnames = sum(map(lambda x:x.split(","),args.fnames),[])
     print(fnames)
     if not fnames:
-        print("wtf, no files to run on?")
-        sys.exit()
+        raise RuntimeError("wtf, no files to run on?")
     fnames = map(xrootdify,fnames)
+    print(fnames)
 
     treename = "Events"
-
-    # iinitial pass with Draw statements (MUCH more xrootd-prefetch-friendly -- NOTE actually not really clear to me if this is true)
-    # then override the file/expected events for later steps
-    if args.initialpass:
-        nevents0,nevents1 = initial_slim_skim(fnames=fnames,treename=treename,output="initial.root",expected=expected)
-        fnames = ["initial.root"]
-        if expected > 0:
-            expected = nevents1
-
 
     fname_out = args.output
 
@@ -92,20 +50,26 @@ def main():
     branchnames = [b.GetName() for b in ch.GetListOfBranches()]
     has_gen_info = any("genParticles" in name for name in branchnames)
 
-    ch.SetBranchStatus("FEDRawDataCollection_hltFEDSelectorL1__HLT.*",0)
-    ch.SetBranchStatus("edmTriggerResults_TriggerResults__HLT.*",0)
-    # NOTE 440Hz with custom slimmed RAW format. can improve by simplying turning off more stuff that we don't need.
-    ch.SetBranchStatus("*addPileupInfo*",0)
-    ch.SetBranchStatus("*externalLHEProducer*",0)
-    ch.SetBranchStatus("*genPUProtons*",0)
-    ch.SetBranchStatus("*hltScoutingPFPacker*",0)
-    ch.SetBranchStatus("*hltScoutingTrackPacker*",0)
-    ch.SetBranchStatus("*hltTriggerSummaryAOD*",0)
-    ch.SetBranchStatus("*recoGenJets*",0)
-    ch.SetBranchStatus("*simMuonCSCDigis*",0)
-    ch.SetBranchStatus("*simMuonDTDigis*",0)
-    ch.SetBranchStatus("*triggerTriggerEvent*",0)
-    ch.SetBranchStatus("edmRandomEngineStates*",0)
+    # ch.SetBranchStatus("FEDRawDataCollection_hltFEDSelectorL1__HLT.*",0)
+    # ch.SetBranchStatus("edmTriggerResults_TriggerResults__*",0)
+    # ch.SetBranchStatus("*addPileupInfo*",0)
+    # ch.SetBranchStatus("*externalLHEProducer*",0)
+    # ch.SetBranchStatus("*genPUProtons*",0)
+    # ch.SetBranchStatus("*hltScoutingPFPacker*",0)
+    # ch.SetBranchStatus("*hltScoutingTrackPacker*",0)
+    # ch.SetBranchStatus("*hltTriggerSummaryAOD*",0)
+    # ch.SetBranchStatus("*recoGenJets*",0)
+    # ch.SetBranchStatus("*simMuonCSCDigis*",0)
+    # ch.SetBranchStatus("*simMuonDTDigis*",0)
+    # ch.SetBranchStatus("*triggerTriggerEvent*",0)
+    # ch.SetBranchStatus("edmRandomEngineStates*",0)
+
+    ch.SetBranchStatus("*",0)
+    ch.SetBranchStatus("*hltScoutingMuonPackerCalo*",1)
+    ch.SetBranchStatus("*hltScoutingCaloPacker*",1)
+    ch.SetBranchStatus("*hltScoutingPrimaryVertexPacker*",1)
+    ch.SetBranchStatus("*prunedGenParticles*",1)
+    ch.SetBranchStatus("*EventAuxiliary*",1)
 
     newfile = r.TFile(fname_out, "recreate")
     if args.compression > 0:
@@ -271,12 +235,15 @@ def main():
     v2 = r.TLorentzVector()
 
     ievt = 0
-    print(">>> Started slimming/skimming tree with {} events".format(ch.GetEntries()))
+    nevents_in = ch.GetEntries()
+    print(">>> Started slimming/skimming tree with {} events".format(nevents_in))
     t0 = time.time()
     tprev = time.time()
     nprev = 0
+    # bar = tqdm(total=ch.GetEntries())
     for evt in ch:
-        if (ievt-1) % 500 == 0:
+        # if ievt % 10 == 0: bar.update(10)
+        if (ievt-1) % 10000 == 0:
             nnow = ievt
             tnow = time.time()
             print(">>> [currevt={}] Last {} events in {:.2f} seconds @ {:.1f}Hz".format(nnow,nnow-nprev,(tnow-tprev),(nnow-nprev)/(tnow-tprev)))
@@ -337,7 +304,11 @@ def main():
                     branches[k].push_back(getattr(jet,k.replace("Jet_",""))())
 
         if has_gen_info:
-            genparts = list(evt.recoGenParticles_genParticles__HLT.product())
+            try:
+                # genparts = list(evt.recoGenParticles_genParticles__HLT.product()) # rawsim
+                genparts = list(evt.recoGenParticles_prunedGenParticles__PAT.product()) # miniaodsim
+            except:
+                genparts = []
         else:
             genparts = []
         nMuFromZ = 0
@@ -411,15 +382,21 @@ def main():
             branches["LeadingPair_isOS"][0] = False
 
         newtree.Fill()
+
     t1 = time.time()
+    # bar.close()
 
-    print(">>> Finished slim/skim of {} events in {:.2f} seconds @ {:.1f}Hz".format(ievt,(t1-t0),ievt/(t1-t0)))
-    print(">>> Output tree has size {:.1f}MB and {} events".format(os.stat(fname_out).st_size/1e6,newtree.GetEntries()))
-
-
-
+    neventsout = newtree.GetEntries()
     newtree.Write()
     newfile.Close()
+
+    print(">>> Finished slim/skim of {} events in {:.2f} seconds @ {:.1f}Hz".format(ievt,(t1-t0),ievt/(t1-t0)))
+    print(">>> Output tree has size {:.1f}MB and {} events".format(os.stat(fname_out).st_size/1e6,neventsout))
+
+    if (ievt != nevents_in):
+        print(">>> Looped over {} entries instead of {}. Raising exit code=2.".format(ievt,nevents_in))
+        # FIXME do we delete if they don't match?
+        sys.exit(2)
 
     if (expected > 0) and (int(expected) != ievt):
         print(">>> Expected {} events but ran on {}. Raising exit code=2.".format(expected,ievt))

@@ -1,4 +1,5 @@
 from metis.CMSSWTask import CMSSWTask
+from metis.CondorTask import CondorTask
 from metis.Sample import DirectorySample, DBSSample
 from metis.StatsParser import StatsParser
 from metis.Optimizer import Optimizer
@@ -7,72 +8,46 @@ import time
 import numpy as np
 
 def main():
-    optimizer = Optimizer()
     total_summary = {}
 
-    # Technically not a cmssw job, just a python script we execute, but be lazy and use CMSSWTask
-    # and tell it the python script is a pset, but our executable uses python instead of cmsRun
-    # and we don't want to edit pset stuff at the end in CMSSWTask.py (`dont_edit_pset`)
+    extra_requirements = "True"
+    blacklisted_machines = [
+             "cabinet-4-4-29.t2.ucsd.edu",
+             "cabinet-7-7-36.t2.ucsd.edu",
+             "cabinet-8-8-1.t2.ucsd.edu",
+             ]
+    if blacklisted_machines:
+        extra_requirements = " && ".join(map(lambda x: '(TARGET.Machine != "{0}")'.format(x),blacklisted_machines))
 
-
-    for ds in [
-            "/ScoutingCaloMuon/Run2018A-v1/RAW",
-            # "/ScoutingCaloMuon/Run2018B-v1/RAW",
-            # "/ScoutingCaloMuon/Run2018C-v1/RAW",
-            # "/ScoutingCaloMuon/Run2018D-v1/RAW",
-            ]:
-
-        task = CMSSWTask(
-                sample = DBSSample(dataset=ds),
+    # for era in ["B"]:
+    # for era in ["B","C"]:
+    for era in ["A","B","C","D"]:
+        extra = {}
+        # if era == "D":
+        #     extra = dict(open_dataset=True)
+        task = CondorTask(
+                sample = DirectorySample(
+                    location = "/hadoop/cms/store/user/namin/ScoutingCaloMuon/crab_skim_2018{}/190919_*/0000/".format(era),
+                    dataset = "/ScoutingCaloMuon/Run2018{}-v1/RAW".format(era)
+                    ),
                 output_name = "output.root",
                 executable = "executables/scouting_exe.sh",
-                pset = "slim_and_skim.py",
+                tarfile = "package.tar.gz",
+                MB_per_output = 3000,
+                condor_submit_params = {
+                    "sites":"T2_US_UCSD",  # I/O is hella faster
+                    "classads": [ 
+                        ["JobBatchName","scouting_2018{}".format(era)],
+                        ],
+                    "requirements_line": 'Requirements = ((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true) && {extra_requirements})'.format(extra_requirements=extra_requirements),
+                    },
                 cmssw_version = "CMSSW_10_2_5",
                 scram_arch = "slc6_amd64_gcc700",
-                publish_to_dis = False,
-                snt_dir = False,
-                dont_edit_pset = True,
-                tag = "v2",
-                events_per_output = 5e6,
+                tag = "v3",
+                **extra
                 )
-        task.process(optimizer=optimizer)
-        summary = task.get_task_summary()
-        total_summary[task.get_sample().get_datasetname()] = summary
 
-    StatsParser(data=total_summary, webdir="~/public_html/dump/scouting/").do()
-    time.sleep(30*60)
-
-def test():
-    optimizer = Optimizer()
-    total_summary = {}
-
-    # Technically not a cmssw job, just a python script we execute, but be lazy and use CMSSWTask
-    # and tell it the python script is a pset, but our executable uses python instead of cmsRun
-    # and we don't want to edit pset stuff at the end in CMSSWTask.py (`dont_edit_pset`)
-
-
-    for ds in [
-            "/ScoutingCaloMuon/Run2018A-v1/RAW",
-            "/ScoutingCaloMuon/Run2018B-v1/RAW",
-            "/ScoutingCaloMuon/Run2018C-v1/RAW",
-            "/ScoutingCaloMuon/Run2018D-v1/RAW",
-            ]:
-
-        task = CMSSWTask(
-                sample = DBSSample(dataset=ds),
-                output_name = "output.root",
-                executable = "executables/scouting_exe.sh",
-                pset = "slim_and_skim.py",
-                cmssw_version = "CMSSW_10_2_5",
-                scram_arch = "slc6_amd64_gcc700",
-                publish_to_dis = False,
-                snt_dir = False,
-                dont_edit_pset = True,
-                tag = "vtest",
-                events_per_output = 500e3,
-                max_jobs = 10,
-                )
-        task.process(optimizer=optimizer)
+        task.process()
         summary = task.get_task_summary()
         total_summary[task.get_sample().get_datasetname()] = summary
 
@@ -82,4 +57,4 @@ def test():
 if __name__ == "__main__":
 
     main()
-    # test()
+

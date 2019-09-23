@@ -4,14 +4,8 @@ OUTPUTDIR=$1
 OUTPUTNAME=$2
 INPUTFILENAMES=$3
 IFILE=$4
-PSET=$5
-CMSSWVERSION=$6
-SCRAMARCH=$7
-NEVTS=$8
-FIRSTEVT=$9
-EXPECTEDNEVTS=${10}
-OTHEROUTPUTS=${11}
-PSETARGS="${@:12}" # since args can have spaces, we take 10th-->last argument as one
+CMSSWVERSION=$5
+SCRAMARCH=$6
 
 # Make sure OUTPUTNAME doesn't have .root since we add it manually
 OUTPUTNAME=$(echo $OUTPUTNAME | sed 's/\.root//')
@@ -80,13 +74,8 @@ echo "OUTPUTDIR: $OUTPUTDIR"
 echo "OUTPUTNAME: $OUTPUTNAME"
 echo "INPUTFILENAMES: $INPUTFILENAMES"
 echo "IFILE: $IFILE"
-echo "PSET: $PSET"
 echo "CMSSWVERSION: $CMSSWVERSION"
 echo "SCRAMARCH: $SCRAMARCH"
-echo "NEVTS: $NEVTS"
-echo "EXPECTEDNEVTS: $EXPECTEDNEVTS"
-echo "OTHEROUTPUTS: $OTHEROUTPUTS"
-echo "PSETARGS: $PSETARGS"
 # echo  CLASSAD: $(cat "$_CONDOR_JOB_AD")
 
 echo "GLIDEIN_CMSSite: $GLIDEIN_CMSSite"
@@ -116,33 +105,29 @@ fi
 eval `scramv1 project CMSSW $CMSSWVERSION`
 cd $CMSSWVERSION
 eval `scramv1 runtime -sh`
-mv ../$PSET pset.py
-if [ -e ../${tarfile} ]; then
-    mv ../${tarfile} ${tarfile};
-    tar xf ${tarfile};
-fi
-scram b
+mv ../*.{gz,xz,py} .
+tar xf *.gz
+tar xf *.xz
 
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.
 
 echo "before running: ls -lrth"
 ls -lrth 
 
 echo -e "\n--- begin running ---\n" #                           <----- section division
 
-chirp ChirpMetisExpectedNevents $EXPECTEDNEVTS
+chirp ChirpMetisStatus "before_script"
 
-chirp ChirpMetisStatus "before_cmsRun"
+python slim_and_skim.py $INPUTFILENAMES --output ${OUTPUTNAME}.root
+SCRIPT_STATUS=$?
 
-python pset.py $INPUTFILENAMES --expected $EXPECTEDNEVTS --output ${OUTPUTNAME}.root
-CMSRUN_STATUS=$?
-
-chirp ChirpMetisStatus "after_cmsRun"
+chirp ChirpMetisStatus "after_script"
 
 echo "after running: ls -lrth"
 ls -lrth
 
-if [[ $CMSRUN_STATUS != 0 ]]; then
-    echo "Removing output file because cmsRun crashed with exit code $?"
+if [[ $SCRIPT_STATUS != 0 ]]; then
+    echo "Removing output file because script crashed with exit code $?"
     rm ${OUTPUTNAME}.root
     exit 1
 fi
@@ -165,15 +150,6 @@ chirp ChirpMetisStatus "before_copy"
 COPY_SRC="file://`pwd`/${OUTPUTNAME}.root"
 COPY_DEST="gsiftp://gftp.t2.ucsd.edu${OUTPUTDIR}/${OUTPUTNAME}_${IFILE}.root"
 stageout $COPY_SRC $COPY_DEST
-
-for OTHEROUTPUT in $(echo "$OTHEROUTPUTS" | sed -n 1'p' | tr ',' '\n'); do
-    [ -e ${OTHEROUTPUT} ] && {
-        NOROOT=$(echo $OTHEROUTPUT | sed 's/\.root//')
-        COPY_SRC="file://`pwd`/${NOROOT}.root"
-        COPY_DEST="gsiftp://gftp.t2.ucsd.edu${OUTPUTDIR}/${NOROOT}_${IFILE}.root"
-        stageout $COPY_SRC $COPY_DEST
-    }
-done
 
 echo -e "\n--- end copying output ---\n" #                      <----- section division
 

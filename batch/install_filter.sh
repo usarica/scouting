@@ -1,4 +1,6 @@
 
+source /cvmfs/cms.cern.ch/cmsset_default.sh
+
 release=CMSSW_10_2_5
 cmsrel $release
 cd $_

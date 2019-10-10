@@ -48,7 +48,8 @@ def main():
         ch.Add(fname)
 
     branchnames = [b.GetName() for b in ch.GetListOfBranches()]
-    has_gen_info = any("genParticles" in name for name in branchnames)
+    is_miniaod_gen = any("prunedGenParticles" in name for name in branchnames)
+    has_gen_info = any("genParticles" in name for name in branchnames) or is_miniaod_gen
 
     # ch.SetBranchStatus("FEDRawDataCollection_hltFEDSelectorL1__HLT.*",0)
     # ch.SetBranchStatus("edmTriggerResults_TriggerResults__*",0)
@@ -68,8 +69,11 @@ def main():
     ch.SetBranchStatus("*hltScoutingMuonPackerCalo*",1)
     ch.SetBranchStatus("*hltScoutingCaloPacker*",1)
     ch.SetBranchStatus("*hltScoutingPrimaryVertexPacker*",1)
-    ch.SetBranchStatus("*prunedGenParticles*",1)
     ch.SetBranchStatus("*EventAuxiliary*",1)
+    if is_miniaod_gen:
+        ch.SetBranchStatus("*prunedGenParticles*",1)
+    else:
+        ch.SetBranchStatus("*genParticles*",1)
 
     newfile = r.TFile(fname_out, "recreate")
     if args.compression > 0:
@@ -305,8 +309,10 @@ def main():
 
         if has_gen_info:
             try:
-                # genparts = list(evt.recoGenParticles_genParticles__HLT.product()) # rawsim
-                genparts = list(evt.recoGenParticles_prunedGenParticles__PAT.product()) # miniaodsim
+                if is_miniaod_gen:
+                    genparts = list(evt.recoGenParticles_prunedGenParticles__PAT.product()) # miniaodsim
+                else:
+                    genparts = list(evt.recoGenParticles_genParticles__HLT.product()) # rawsim
             except:
                 genparts = []
         else:

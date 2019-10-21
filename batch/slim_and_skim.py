@@ -5,18 +5,55 @@ import ROOT as r
 from tqdm import tqdm
 
 import array
+import math
 import time
 import argparse
 import os
+import pickle
+import gzip
 
 branches = {}
 
 def xrootdify(fname):
-    if "/namin/" in fname:
+    if "/hadoop/cms/store/user/namin/" in fname:
         fname = "root://redirector.t2.ucsd.edu/" + fname.replace("/hadoop/cms","")
     if fname.startswith("/store"):
         fname = "root://cmsxrootd.fnal.gov/" + fname
     return fname
+
+# index is [year][is_mc]
+bs_data = { 
+        2017: {False: {}, True: {}},
+        2018: {False: {}, True: {}},
+        }
+def load_bs_data(is_mc, year):
+    global bs_data
+    if is_mc:
+        # Events->Scan("recoBeamSpot_offlineBeamSpot__RECO.obj.x0()") in miniaod (and y0). 
+        # From 2018 MC with global tag of 102X_upgrade2018_realistic_v11
+        bs_data[2018][is_mc] = { (0,0): [0.0107796, 0.041893, 0.0248755] }
+    else:
+        print("Loading beamspot data for year={}".format(year))
+        t0 = time.time()
+        data = []
+        with gzip.open("data/beamspots_{}.pkl.gz".format(year),"r") as fh:
+            data = pickle.load(fh)
+        for run,lumi,x,y,z in data:
+            bs_data[year][is_mc][(run,lumi)] = [x,y,z]
+        t1 = time.time()
+        print("Finished loading {} rows in {:.1f} seconds".format(len(data),t1-t0))
+
+def get_bs(run, lumi, is_mc=False, year=2018):
+    global bs_data
+    if is_mc: run,lumi = 0,0
+    if not bs_data[year][is_mc]:
+        load_bs_data(is_mc=is_mc, year=year)
+    data = bs_data[year][is_mc]
+    xyz = data.get((run,lumi),None)
+    if xyz is None:
+        xyz = data.get((0,0),[0,0,0])
+        print("WARNING: Couldn't find (run={},lumi={},is_mc={},year={}) in beamspot lookup data. Falling back to the total mean: {}".format(run,lumi,is_mc,year,xyz))
+    return xyz
 
 def main():
 
@@ -50,6 +87,7 @@ def main():
     branchnames = [b.GetName() for b in ch.GetListOfBranches()]
     is_miniaod_gen = any("prunedGenParticles" in name for name in branchnames)
     has_gen_info = any("genParticles" in name for name in branchnames) or is_miniaod_gen
+    is_mc = has_gen_info
 
     # ch.SetBranchStatus("FEDRawDataCollection_hltFEDSelectorL1__HLT.*",0)
     # ch.SetBranchStatus("edmTriggerResults_TriggerResults__*",0)
@@ -65,11 +103,18 @@ def main():
     # ch.SetBranchStatus("*triggerTriggerEvent*",0)
     # ch.SetBranchStatus("edmRandomEngineStates*",0)
 
+# bools_triggerMaker_hltresult_SLIM.obj : vector<bool>               *
+# bools_triggerMaker_l1result_SLIM.obj : vector<bool>                *
+# ints_triggerMaker_l1prescale_SLIM.obj : vector<int>                *
+# Strings_triggerMaker_hltname_SLIM.obj : vector<string>             *
+# Strings_triggerMaker_l1name_SLIM.obj : vector<string>              *
+
     ch.SetBranchStatus("*",0)
     ch.SetBranchStatus("*hltScoutingMuonPackerCalo*",1)
     ch.SetBranchStatus("*hltScoutingCaloPacker*",1)
     ch.SetBranchStatus("*hltScoutingPrimaryVertexPacker*",1)
     ch.SetBranchStatus("*EventAuxiliary*",1)
+    ch.SetBranchStatus("*triggerMaker*",1)
     if is_miniaod_gen:
         ch.SetBranchStatus("*prunedGenParticles*",1)
     else:
@@ -129,6 +174,8 @@ def main():
     make_branch("DV_chi2","vf")
     make_branch("DV_ndof","vf")
     make_branch("DV_isValidVtx","vf")
+    make_branch("DV_rho", "vf")
+    make_branch("DV_rhoCorr", "vf")
 
     make_branch("Jet_pt", "vf")
     make_branch("Jet_eta", "vf")
@@ -147,6 +194,7 @@ def main():
     make_branch("Jet_mvaDiscriminator", "vf")
     make_branch("Jet_btagDiscriminator", "vf")
 
+    make_branch("nPV", "i")
     make_branch("PV_x", "vf")
     make_branch("PV_y", "vf")
     make_branch("PV_z", "vf")
@@ -158,6 +206,7 @@ def main():
     make_branch("PV_ndof", "vi")
     make_branch("PV_isValidVtx", "vb")
 
+    make_branch("nPVM", "i")
     make_branch("PVM_x", "vf")
     make_branch("PVM_y", "vf")
     make_branch("PVM_z", "vf")
@@ -173,8 +222,8 @@ def main():
     make_branch("Muon_eta", "vf")
     make_branch("Muon_phi", "vf")
     make_branch("Muon_m", "vf")
-    make_branch("Muon_ecalIso", "vf")
-    make_branch("Muon_hcalIso", "vf")
+    # make_branch("Muon_ecalIso", "vf")
+    # make_branch("Muon_hcalIso", "vf")
     make_branch("Muon_trackIso", "vf")
     make_branch("Muon_chi2", "vf")
     make_branch("Muon_ndof", "vf")
@@ -185,7 +234,7 @@ def main():
     make_branch("Muon_nValidPixelHits", "vi")
     make_branch("Muon_nMatchedStations", "vi")
     make_branch("Muon_nTrackerLayersWithMeasurement", "vi")
-    make_branch("Muon_type", "vi")
+    # make_branch("Muon_type", "vi")
     make_branch("Muon_nValidStripHits", "vi")
     make_branch("Muon_trk_qoverp", "vf")
     make_branch("Muon_trk_lambda", "vf")
@@ -199,13 +248,17 @@ def main():
     make_branch("Muon_trk_phiError", "vf")
     make_branch("Muon_trk_dsz", "vf")
     make_branch("Muon_trk_dszError", "vf")
-    make_branch("Muon_vtxIndx","vvi")
+    # make_branch("Muon_vtxIndx","vvi")
     make_branch("Muon_vtxNum","vi")
     make_branch("Muon_vtxIndx1","vi")
-    make_branch("Muon_vtxIndx2","vi")
-    make_branch("Muon_vtxIndx3","vi")
-    make_branch("Muon_vtxIndx4","vi")
-    make_branch("Muon_vtxIndx5","vi")
+    # make_branch("Muon_vtxIndx2","vi")
+    # make_branch("Muon_vtxIndx3","vi")
+    # make_branch("Muon_vtxIndx4","vi")
+    # make_branch("Muon_vtxIndx5","vi")
+    make_branch("Muon_vx", "vf")
+    make_branch("Muon_vy", "vf")
+    make_branch("Muon_vz", "vf")
+    make_branch("Muon_dxyCorr", "vf")
 
     make_branch("GenPart_pt", "vf")
     make_branch("GenPart_eta", "vf")
@@ -231,12 +284,28 @@ def main():
 
     make_branch("Gen_nMuFromZ", "i")
 
+    make_branch("BS_x", "f")
+    make_branch("BS_y", "f")
+    make_branch("BS_z", "f")
+
+    # NOTE add in 
+    # beamspot x,y,z 
+    # dxyCorr (for beamspot shift)
+    # DV_rho 
+    # DV_rhoCorr
+
+    # Muon_vx Muon_vy (which are just the DV's x,y for that muon, but be careful because rutgers ppl said the DV association might not be right)
+    # drop some stuff like hcaliso ecaliso
+    # drop vtxIndx if we do the above _vx _vy association
+
     if args.basketsize > 0:
         newtree.SetBasketSize("*",int(args.basketsize*1000))
 
 
     v1 = r.TLorentzVector()
     v2 = r.TLorentzVector()
+
+    made_trigger_branches = False
 
     ievt = 0
     nevents_in = ch.GetEntries()
@@ -247,7 +316,8 @@ def main():
     # bar = tqdm(total=ch.GetEntries())
     for evt in ch:
         # if ievt % 10 == 0: bar.update(10)
-        if (ievt-1) % 10000 == 0:
+        # if (ievt-1) % 10000 == 0:
+        if (ievt-1) % 1000 == 0:
             nnow = ievt
             tnow = time.time()
             print(">>> [currevt={}] Last {} events in {:.2f} seconds @ {:.1f}Hz".format(nnow,nnow-nprev,(tnow-tprev),(nnow-nprev)/(tnow-tprev)))
@@ -276,36 +346,72 @@ def main():
         pvs = evt.ScoutingVertexs_hltScoutingPrimaryVertexPacker_primaryVtx_HLT.product()
         pvms = evt.ScoutingVertexs_hltScoutingPrimaryVertexPackerCaloMuon_primaryVtx_HLT.product()
 
+        do_trigger = True
+        if do_trigger:
+            hltresults = map(bool,evt.bools_triggerMaker_hltresult_SLIM.product())
+            hltnames = list(evt.Strings_triggerMaker_hltname_SLIM.product())
+            l1results = map(bool,evt.bools_triggerMaker_l1result_SLIM.product())
+            l1names = list(evt.Strings_triggerMaker_l1name_SLIM.product())
+            l1prescales = list(evt.ints_triggerMaker_l1prescale_SLIM.product())
+            if not made_trigger_branches:
+                for name in hltnames:
+                    make_branch("HLT_{}".format(name), "b")
+                for name in l1names:
+                    make_branch("{}".format(name), "b")
+                    make_branch("{}_prescale".format(name), "i")
+                made_trigger_branches = True
+
         clear_branches()
 
-        branches["run"][0] = int(evt.EventAuxiliary.run())
-        branches["luminosityBlock"][0] = int(evt.EventAuxiliary.luminosityBlock())
-        branches["event"][0] = int(evt.EventAuxiliary.event())
+        if do_trigger:
+            for bit,name in zip(hltresults,hltnames):
+                branches["HLT_{}".format(name)][0] = bit
+            for bit,name,prescale in zip(l1results,l1names,l1prescales):
+                branches["{}".format(name)][0] = bit
+                branches["{}_prescale".format(name)][0] = prescale
+
+        run = int(evt.EventAuxiliary.run())
+        lumi = int(evt.EventAuxiliary.luminosityBlock())
+        eventnum = int(evt.EventAuxiliary.event())
+        branches["run"][0] = run
+        branches["luminosityBlock"][0] = lumi
+        branches["event"][0] = eventnum
 
         branches["MET_pt"][0] = evt.double_hltScoutingCaloPacker_caloMetPt_HLT.product()[0]
         branches["MET_phi"][0] = evt.double_hltScoutingCaloPacker_caloMetPhi_HLT.product()[0]
         branches["rho"][0] = evt.double_hltScoutingCaloPacker_rho_HLT.product()[0]
 
+        bsx,bsy,bsz = get_bs(run=run,lumi=lumi,is_mc=is_mc,year=2018)
+        branches["BS_x"][0] = bsx
+        branches["BS_y"][0] = bsy
+        branches["BS_z"][0] = bsz
 
         for dv in dvs:
-            for k in branches:
-                if k.startswith("DV_"):
-                    branches[k].push_back(getattr(dv,k.replace("DV_",""))())
+            for k in ["x", "y", "z", "xError", "yError", "zError", "tracksSize", "chi2", "ndof", "isValidVtx"]:
+                branches["DV_"+k].push_back(getattr(dv,k)())
+            vx = dv.x()
+            vy = dv.y()
+            rho = (vx**2 + vy**2)**0.5
+            rhoCorr = ((vx-bsx)**2 + (vy-bsy)**2)**0.5
+            branches["DV_rho"].push_back(rho)
+            branches["DV_rhoCorr"].push_back(rhoCorr)
 
         for pv in pvs:
-            for k in branches:
-                if k.startswith("PV_"):
-                    branches[k].push_back(getattr(pv,k.replace("PV_",""))())
+            for k in ["x", "y", "z", "zError", "xError", "yError", "tracksSize", "chi2", "ndof", "isValidVtx",]:
+                branches["PV_"+k].push_back(getattr(pv,k)())
+        branches["nPV"][0] = len(pvs)
 
         for pvm in pvms:
-            for k in branches:
-                if k.startswith("PVM_"):
-                    branches[k].push_back(getattr(pvm,k.replace("PVM_",""))())
+            for k in ["x", "y", "z", "zError", "xError", "yError", "tracksSize", "chi2", "ndof", "isValidVtx",]:
+                branches["PVM_"+k].push_back(getattr(pvm,k)())
+        branches["nPVM"][0] = len(pvms)
 
         for jet in jets:
-            for k in branches:
-                if k.startswith("Jet_"):
-                    branches[k].push_back(getattr(jet,k.replace("Jet_",""))())
+            for k in ["pt", "eta", "phi", "m", "jetArea", "maxEInEmTowers", "maxEInHadTowers",
+                    "hadEnergyInHB", "hadEnergyInHE", "hadEnergyInHF", "emEnergyInEB",
+                    "emEnergyInEE", "emEnergyInHF", "towersArea", "mvaDiscriminator",
+                    "btagDiscriminator",]:
+                branches["Jet_"+k].push_back(getattr(jet,k)())
 
         if has_gen_info:
             try:
@@ -350,31 +456,53 @@ def main():
         branches["Gen_nMuFromZ"][0] = nMuFromZ
 
         for muon in muons:
-            for k in branches:
-                if k.startswith("Muon_") and k not in [
-                        "Muon_vtxIndx",
-                        "Muon_vtxIndx1",
-                        "Muon_vtxIndx2",
-                        "Muon_vtxIndx3",
-                        "Muon_vtxIndx4",
-                        "Muon_vtxIndx5",
-                        "Muon_vtxNum",
-                        ]:
-                    branches[k].push_back(getattr(muon,k.replace("Muon_",""))())
+            for k in ["pt", "eta", "phi", "m", "trackIso", "chi2", "ndof",
+                    "charge", "dxy", "dz", "nValidMuonHits", "nValidPixelHits",
+                    "nMatchedStations", "nTrackerLayersWithMeasurement",
+                    "nValidStripHits", "trk_qoverp", "trk_lambda", "trk_pt", "trk_phi",
+                    "trk_eta", "dxyError", "dzError", "trk_qoverpError", "trk_lambdaError",
+                    "trk_phiError", "trk_dsz", "trk_dszError",]:
+                branches["Muon_"+k].push_back(getattr(muon,k)())
             indices = muon.vtxIndx()
             num = len(indices)
-            branches["Muon_vtxIndx"].push_back(indices)
+            # branches["Muon_vtxIndx"].push_back(indices)
             branches["Muon_vtxNum"].push_back(num)
             if num > 0: branches["Muon_vtxIndx1"].push_back(indices[0])
             else: branches["Muon_vtxIndx1"].push_back(-1)
-            if num > 1: branches["Muon_vtxIndx2"].push_back(indices[1])
-            else: branches["Muon_vtxIndx2"].push_back(-1)
-            if num > 2: branches["Muon_vtxIndx3"].push_back(indices[2])
-            else: branches["Muon_vtxIndx3"].push_back(-1)
-            if num > 3: branches["Muon_vtxIndx4"].push_back(indices[3])
-            else: branches["Muon_vtxIndx4"].push_back(-1)
-            if num > 4: branches["Muon_vtxIndx5"].push_back(indices[4])
-            else: branches["Muon_vtxIndx5"].push_back(-1)
+            # if num > 1: branches["Muon_vtxIndx2"].push_back(indices[1])
+            # else: branches["Muon_vtxIndx2"].push_back(-1)
+            # if num > 2: branches["Muon_vtxIndx3"].push_back(indices[2])
+            # else: branches["Muon_vtxIndx3"].push_back(-1)
+            # if num > 3: branches["Muon_vtxIndx4"].push_back(indices[3])
+            # else: branches["Muon_vtxIndx4"].push_back(-1)
+            # if num > 4: branches["Muon_vtxIndx5"].push_back(indices[4])
+            # else: branches["Muon_vtxIndx5"].push_back(-1)
+
+            dxy = muon.dxy()
+
+            if len(dvs) > 0:
+                # get index into `dvs` for this muon, falling back to first one in collection
+                idx = 0
+                if num > 0 and (0 <= indices[0] < len(dvs)):
+                    idx = indices[0]
+                dv = dvs[idx]
+                vx = dv.x()
+                vy = dv.y()
+                vz = dv.z()
+                phi = muon.phi()
+                # # https://github.com/cms-sw/cmssw/blob/master/DataFormats/TrackReco/interface/TrackBase.h#L24
+                dxyCorr = -(vx-bsx)*math.sin(phi) + (vy-bsy)*math.cos(phi)
+                # dxyCorr = -(vx)*math.sin(phi) + (vy)*math.cos(phi)
+                # dxyCorr = -(vx-pvms[0].x())*math.sin(phi) + (vy-pvms[0].y())*math.cos(phi)
+            else:
+                # fill muon vertex branches with dummy values since there are no DVs to even look at
+                vx, vy, vz = 0, 0, 0
+                dxyCorr = dxy
+            branches["Muon_vx"].push_back(vx)
+            branches["Muon_vy"].push_back(vy)
+            branches["Muon_vz"].push_back(vz)
+            branches["Muon_dxyCorr"].push_back(dxyCorr)
+
 
         if len(muons) >= 2:
             v1.SetPtEtaPhiM(muons[0].pt(), muons[0].eta(), muons[0].phi(), muons[0].m())

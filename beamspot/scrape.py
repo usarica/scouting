@@ -26,39 +26,44 @@ def dict_to_csv(d):
     return buff
 
 def save_one(fname_in,fname_out):
-    ch = r.TChain("Events")
-    ch.Add(fname_in)
+    try:
+        ch = r.TChain("Events")
+        ch.Add(fname_in)
 
-    N = ch.GetEntries()
-    ch.SetEstimate(N)
+        N = ch.GetEntries()
+        ch.SetEstimate(N)
 
-    t0 = time.time()
-    N = ch.Draw(
-            "recoBeamSpot_offlineBeamSpot__RECO.obj.x0()"
-            ":recoBeamSpot_offlineBeamSpot__RECO.obj.y0()"
-            ":recoBeamSpot_offlineBeamSpot__RECO.obj.z0()"
-            ":EventAuxiliary.run()"
-            ":EventAuxiliary.luminosityBlock()","","goff")
-    t1 = time.time()
-    # print(N, t1-t0)
+        t0 = time.time()
+        N = ch.Draw(
+                "recoBeamSpot_offlineBeamSpot__RECO.obj.x0()"
+                ":recoBeamSpot_offlineBeamSpot__RECO.obj.y0()"
+                ":recoBeamSpot_offlineBeamSpot__RECO.obj.z0()"
+                ":EventAuxiliary.run()"
+                ":EventAuxiliary.luminosityBlock()","","goff")
+        t1 = time.time()
+        # print(N, t1-t0)
 
-    vx0 = ch.GetVal(0)
-    vy0 = ch.GetVal(1)
-    vz0 = ch.GetVal(2)
-    vrun = ch.GetVal(3)
-    vlumi = ch.GetVal(4)
+        vx0 = ch.GetVal(0)
+        vy0 = ch.GetVal(1)
+        vz0 = ch.GetVal(2)
+        vrun = ch.GetVal(3)
+        vlumi = ch.GetVal(4)
 
-    data = {}
-    for i in range(N):
-        run = int(vrun[i])
-        lumi = int(vlumi[i])
-        if (run,lumi) not in data:
-            x0 = vx0[i]
-            y0 = vy0[i]
-            z0 = vz0[i]
-            data[(run,lumi)] = (x0,y0,z0)
+        data = {}
+        for i in range(N):
+            run = int(vrun[i])
+            lumi = int(vlumi[i])
+            if (run,lumi) not in data:
+                x0 = vx0[i]
+                y0 = vy0[i]
+                z0 = vz0[i]
+                data[(run,lumi)] = (x0,y0,z0)
 
-    buff = dict_to_csv(data)
+        buff = dict_to_csv(data)
+    except:
+        print("Error with {}".format(fname_in))
+        return False
+
     with open(fname_out,"w") as fh:
         fh.write(buff)
 
@@ -73,14 +78,19 @@ if __name__ == "__main__":
 
     # fnames = ["root://cmsxrootd.fnal.gov//store/data/Run2018C/MET/MINIAOD/17Sep2018-v1/100000/2E6BCD18-5138-7340-B7A8-1CB666726AB4.root"]
 
-    executor = concurrent.futures.ProcessPoolExecutor(8)
+    executor = concurrent.futures.ProcessPoolExecutor(12)
 
     import dis_client as dis
-    files = dis.query("/MET/Run2018C-17Sep2018-v1/MINIAOD",typ="files",detail=True)["payload"]
-    fnames = [f["name"] for f in files]
+    files = (
+            dis.query("/MET/Run2018A-17Sep2018-v1/MINIAOD",typ="files",detail=True)["payload"]
+            + dis.query("/MET/Run2018B-17Sep2018-v1/MINIAOD",typ="files",detail=True)["payload"]
+            + dis.query("/MET/Run2018C-17Sep2018-v1/MINIAOD",typ="files",detail=True)["payload"]
+            + dis.query("/MET/Run2018D-PromptReco-v2/MINIAOD",typ="files",detail=True)["payload"]
+            )
+    fnames = [f["name"] for f in files if f["nevents"]>0]
     print(len(fnames))
 
-    outdir = "outputs/"
+    outdir = "outputs_full2018/"
     os.system("mkdir -p {}".format(outdir))
 
     futures = []

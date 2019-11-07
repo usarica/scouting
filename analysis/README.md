@@ -1,6 +1,8 @@
-## Environment and dependencies
+## Analysis
 
-Install conda and get all the dependencies:
+### Setup
+
+Install conda on the UAF and get all the dependencies:
 ```
 curl -O -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 bash Miniconda3-latest-Linux-x86_64.sh -b 
@@ -20,7 +22,7 @@ Start analysis jupyter notebook:
 conda activate analysisenv 
 jupyter notebook --no-browser
 
-# then execute on your local computer to forward the port, and visit the url
+# then execute this on your local computer to forward the port, and visit the url in your browser
 ssh -N -f -L localhost:1234:localhost:1234 uaf-10.t2.ucsd.edu
 ```
 

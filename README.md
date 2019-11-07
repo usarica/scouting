@@ -2,9 +2,9 @@
 
 The READMEs contained within each folder contain more details. Here's a summary:
 
-### Analysis
+### [Analysis](analysis/)
 
-* "Looping"/plotting with jupyter notebooks. 
+* "Looping"/plotting with jupyter notebooks
 * Table with ntuple details and locations
 
 ### Batch

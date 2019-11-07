@@ -62,7 +62,8 @@ if __name__ == "__main__":
             # ["skim_2018D_v4","v4", ""],
             # ["skim_2018C_v4_unblind1fb","v4", ""],
 
-            ["skim_2018C_v4_unblind1fb","vtestskim1cm", "--skim1cm"],
+            # ["skim_2018C_v4_unblind1fb","vtestskim1cm", "--skim1cm"],
+            ["skim_2018C_v4_unblind1fb","vtest", ""],
             ]
     submit(info)
 

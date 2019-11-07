@@ -35,7 +35,7 @@ no skim of >=1 DV and >=2 Muon is performed (useful for MC samples where accepta
 
 * Clone [ProjectMetis](https://github.com/aminnj/ProjectMetis/) and source its environment
 * Run the babymaker on a file locally to test
-* Edit `submit_baby_jobs.py` to have the right paths (search for hadoop) to the crab output, including the request names, output tags, and skimming options (search for "skim")
+* Edit `submit_baby_jobs.py` to have the right paths (search for "hadoop") to the crab output, including the request names, output tags, and skimming options (search for "skim")
 * `./make_tar.sh` to make the tarball for the jobs
 * `python submit_baby_jobs.py`
 * For now, this just does data. From earlier instructions MC should just be in a single file, so we run `python babymaker.py -a <filename>` locally and wait half an hour.

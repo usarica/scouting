@@ -119,6 +119,8 @@ echo -e "\n--- begin running ---\n" #                           <----- section d
 chirp ChirpMetisStatus "before_script"
 
 EXTRAARGS="$(getjobad metis_extraargs)"
+
+echo "Running: python babymaker.py $INPUTFILENAMES --output ${OUTPUTNAME}.root ${EXTRAARGS}"
 python babymaker.py $INPUTFILENAMES --output ${OUTPUTNAME}.root ${EXTRAARGS}
 SCRIPT_STATUS=$?
 

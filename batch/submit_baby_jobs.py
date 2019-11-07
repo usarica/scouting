@@ -20,7 +20,6 @@ def submit(info):
         extra_requirements = " && ".join(map(lambda x: '(TARGET.Machine != "{0}")'.format(x),blacklisted_machines))
 
     for reqname,tag,extra_args in info:
-        extra_args = ""
         task = CondorTask(
                 sample = DirectorySample(
                     location = "/hadoop/cms/store/user/namin/ScoutingCaloMuon/crab_{}/*/*/".format(reqname),

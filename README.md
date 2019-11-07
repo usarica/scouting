@@ -7,15 +7,15 @@ The READMEs contained within each folder contain more details. Here's a summary:
 * "Looping"/plotting with jupyter notebooks
 * Table with ntuple details and locations
 
-### Batch
+### [Batch](batch/)
 
 * Slimming/skimming and babymaking
 
-### Beamspot
+### [Beamspot](beamspot/)
 
 * Lookup tables for beamspot position
 
-### Geometry
+### [Geometry](geometry/)
 
 * Pixel geometry from CMSSW
 

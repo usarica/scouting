@@ -6,12 +6,12 @@ using namespace std;
 
 TriggerMaker::TriggerMaker(const edm::ParameterSet& iConfig) {
 
-    produces<std::vector<std::string> >       ("l1name"         ).setBranchAlias("l1_name"          );
-    produces<std::vector<bool> >       ("l1result"         ).setBranchAlias("l1_result"          );
-    produces<std::vector<int> >       ("l1prescale"         ).setBranchAlias("l1_prescale"          );
+    produces<std::vector<std::string> > ("l1name" ).setBranchAlias("l1_name");
+    produces<std::vector<bool> > ("l1result" ).setBranchAlias("l1_result");
+    produces<std::vector<int> > ("l1prescale" ).setBranchAlias("l1_prescale");
 
-    produces<std::vector<std::string> >       ("hltname"         ).setBranchAlias("hlt_name"          );
-    produces<std::vector<bool> >       ("hltresult"         ).setBranchAlias("hlt_result"          );
+    produces<std::vector<std::string> > ("hltname" ).setBranchAlias("hlt_name");
+    produces<std::vector<bool> > ("hltresult" ).setBranchAlias("hlt_result");
 
     triggerCache_ = triggerExpression::Data(iConfig.getParameterSet("triggerConfiguration"),consumesCollector());
     vtriggerAlias_ = iConfig.getParameter<vector<string>>("triggerAlias");
@@ -40,7 +40,7 @@ TriggerMaker::~TriggerMaker()
 {
 }
 
-void  TriggerMaker::beginJob()
+void TriggerMaker::beginJob()
 {
 }
 
@@ -54,15 +54,15 @@ void TriggerMaker::endJob()
 void TriggerMaker::beginRun(const edm::Run& iRun, const edm::EventSetup& iSetup) {
 }
 
-// ------------ method called to produce the data  ------------
+// ------------ method called to produce the data ------------
 void TriggerMaker::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
 
-    unique_ptr<vector<string> >                 l1_name          (new vector<string>                );
-    unique_ptr<vector<bool> >                 l1_result          (new vector<bool>                );
-    unique_ptr<vector<int> >                 l1_prescale          (new vector<int>                );
+    unique_ptr<vector<string> > l1_name (new vector<string>);
+    unique_ptr<vector<bool> > l1_result (new vector<bool>);
+    unique_ptr<vector<int> > l1_prescale (new vector<int>);
 
-    unique_ptr<vector<string> >                 hlt_name          (new vector<string>                );
-    unique_ptr<vector<bool> >                 hlt_result          (new vector<bool>                );
+    unique_ptr<vector<string> > hlt_name (new vector<string>);
+    unique_ptr<vector<bool> > hlt_result (new vector<bool>);
 
     if (triggerCache_.setEvent(iEvent, iSetup)) {
         for(unsigned itrig=0; itrig<vtriggerSelector_.size(); ++itrig) {
@@ -90,12 +90,12 @@ void TriggerMaker::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
             l1_prescale->push_back(prescale);
         }
     }
-    
-    iEvent.put(std::move(l1_name             ), "l1name"         );
-    iEvent.put(std::move(l1_result             ), "l1result"         );
-    iEvent.put(std::move(l1_prescale             ), "l1prescale"         );
-    iEvent.put(std::move(hlt_name             ), "hltname"         );
-    iEvent.put(std::move(hlt_result             ), "hltresult"         );
+
+    iEvent.put(std::move(l1_name), "l1name" );
+    iEvent.put(std::move(l1_result), "l1result" );
+    iEvent.put(std::move(l1_prescale), "l1prescale" );
+    iEvent.put(std::move(hlt_name), "hltname" );
+    iEvent.put(std::move(hlt_result), "hltresult" );
 
 }
 

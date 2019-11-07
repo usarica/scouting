@@ -1,5 +1,6 @@
 import numba
 import numpy as np
+import functools
 
 def set_plotting_style():
     from matplotlib import rcParams
@@ -110,3 +111,105 @@ def make_profile(tobin,toreduce,edges=None,errors=True):
     if errors:
         yerr = binned_statistic(tobin,toreduce, 'std', bins=edges).statistic/binned_statistic(tobin,toreduce, 'count', bins=edges).statistic**0.5
     return yvals, yerr
+
+
+@functools.lru_cache(maxsize=256)
+def get_chunking(filelist, chunksize, treename="Events", workers=12, skip_bad_files=False):
+    """
+    Return 2-tuple of
+    - chunks: triplets of (filename,entrystart,entrystop) calculated with input `chunksize` and `filelist`
+    - total_nevents: total event count over `filelist`
+    """
+    import uproot
+    import awkward
+    from tqdm.auto import tqdm
+    import concurrent.futures
+    chunksize = int(chunksize)
+    chunks = []
+    nevents = 0
+    if skip_bad_files:
+        # slightly slower (serial loop), but can skip bad files
+        for fname in tqdm(filelist):
+            try:
+                items = uproot.numentries(fname, treename, total=False).items()
+            except (IndexError, ValueError) as e:
+                print("Skipping bad file", fname)
+                continue
+            for fn, nentries in items:
+                nevents += nentries
+                for index in range(nentries // chunksize + 1):
+                    chunks.append((fn, chunksize*index, min(chunksize*(index+1), nentries)))
+    elif filelist[0].endswith(".awkd"):
+        for fname in tqdm(filelist):
+            f = awkward.load(fname,whitelist=awkward.persist.whitelist + [['blosc', 'decompress']])
+            nentries = len(f["run"])
+            nevents += nentries
+            for index in range(nentries // chunksize + 1):
+                chunks.append((fname, chunksize*index, min(chunksize*(index+1), nentries)))
+    else:
+        executor = None if len(filelist) < 5 else concurrent.futures.ThreadPoolExecutor(min(workers, len(filelist)))
+        for fn, nentries in uproot.numentries(filelist, treename, total=False, executor=executor).items():
+            nevents += nentries
+            for index in range(nentries // chunksize + 1):
+                chunks.append((fn, chunksize*index, min(chunksize*(index+1), nentries)))
+    return chunks, nevents
+
+@functools.lru_cache(maxsize=256)
+def get_chunking_dask(filelist, chunksize, client=None, treename="Events"):
+    import uproot
+    chunks, chunksize, nevents = [], int(chunksize), 0
+    info = client.gather(client.map(lambda x:(x,uproot.numentries(x,treename)), filelist))
+    for fn, nentries in info:
+        nevents += nentries
+        for index in range(nentries // chunksize + 1):
+            chunks.append((fn, chunksize*index, min(chunksize*(index+1), nentries)))
+    return chunks, nevents
+
+
+def get_geometry_df(fname):
+    """
+    Get pixel geometry from inputs made in `geometry/`
+    """
+    import uproot
+    import numpy as np
+    f = uproot.open(fname)
+    t = f["idToGeo"]
+    df = t.pandas.df(branches=["shape","translation","matrix"],flatten=False)
+    df["translation_x"] = df["translation"].str[0]
+    df["translation_y"] = df["translation"].str[1]
+    df["translation_z"] = df["translation"].str[2]
+    df["translation_rho"] = np.hypot(df["translation_x"],df["translation_y"])
+    df = df[df["shape"].apply(lambda x:x[0])==2.]
+    df = df.query("translation_rho<18") # 4 pixel layers
+    return df
+
+
+def plot_overlay_bpix(ax,**kwargs):
+    """
+    Given an axes object, overlays 2D lines for the transverse projection of the first 3 bpix layers
+    Note the hardcoded geometry path
+    """
+    import numpy as np
+    color = kwargs.pop("color","k")
+    binary_triplets = np.unpackbits(np.arange(8,dtype=np.uint8)[:,np.newaxis],1)[:,-3:].astype(int)
+    step_directions = binary_triplets*2-1
+    gdf = get_geometry_df("/home/users/namin/2019/scouting/repo/geometry/tracker_geometry_data2018.root")
+    expand_l = kwargs.pop("expand_l",0.1)
+    expand_w = kwargs.pop("expand_w",0.1)
+    expand_h = kwargs.pop("expand_h",0.2)
+    do_expand = (expand_h > 0) or (expand_w > 0) or (expand_h)
+    for irow,entry in gdf.query("0 < translation_z < 8 and translation_rho<14").iterrows():
+        shape = entry["shape"][1:-1].T
+        if do_expand:
+            newshape = np.array(shape)
+            newshape[0] += expand_l
+            newshape[1] += expand_w
+            newshape[2] += expand_h
+            shape = newshape
+        translation = entry["translation"]
+        matrix = entry["matrix"].reshape(3,3)
+        points = shape * step_directions
+        points = np.array([np.dot(matrix,point)+translation for point in points])
+        points = points[np.array([6,2,1,5,6])]
+        ax.plot(points[:,0],points[:,1],color=color,**kwargs)
+    return ax

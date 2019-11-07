@@ -4,10 +4,15 @@ import array
 branches = {}
 def main():
 
-    f = r.TFile("cmsRecoGeom-2017.root")
+    # f = r.TFile("cmsRecoGeom-2017.root")
+    # f = r.TFile("cmsRecoGeom-data2018.root")
+    # gtag = "102X_dataRun2_v11"
+    # f = r.TFile("cmsRecoGeom-{}.root".format(gtag))
+    f = r.TFile("cmsRecoGeom-data2018.root")
     t = f.Get("idToGeo")
 
-    fname_out = "geometry_for_uproot.root"
+    # fname_out = "tracker_geometry_data2018_{}.root".format(gtag)
+    fname_out = "tracker_geometry_data2018.root"
     newfile = r.TFile(fname_out, "recreate")
     newtree = r.TTree("idToGeo","")
 

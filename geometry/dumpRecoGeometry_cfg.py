@@ -63,6 +63,22 @@ def recoGeoLoad(score):
        from Configuration.AlCa.autoCond import autoCond
        process.GlobalTag.globaltag = autoCond['upgrade2017']
        process.load('Configuration.Geometry.GeometryExtended2017Reco_cff')
+
+    elif score == "mc2018":
+       process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
+       from Configuration.AlCa.GlobalTag import GlobalTag
+       from Configuration.AlCa.autoCond import autoCond
+       process.GlobalTag = GlobalTag(process.GlobalTag, '102X_upgrade2018_realistic_v15', '')
+       process.load('Configuration.StandardSequences.GeometryRecoDB_cff')
+
+    elif score == "data2018":
+       process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
+       from Configuration.AlCa.GlobalTag import GlobalTag
+       from Configuration.AlCa.autoCond import autoCond
+       # process.GlobalTag = GlobalTag(process.GlobalTag, '102X_dataRun2_Prompt_v14', '')
+       # process.GlobalTag = GlobalTag(process.GlobalTag, '102X_dataRun2_v11', '')
+       process.GlobalTag = GlobalTag(process.GlobalTag, '102X_dataRun2_Sep2018Rereco_v1', '')
+       process.load('Configuration.StandardSequences.GeometryRecoDB_cff')
        
     elif  score == "2021":
        process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
@@ -122,7 +138,8 @@ options = VarParsing.VarParsing ()
 defaultOutputFileName="cmsRecoGeom.root"
 
 options.register ('tag',
-                  "2017", # default value
+                  # "2017", # default value
+                  "2018", # default value
                   VarParsing.VarParsing.multiplicity.singleton,
                   VarParsing.VarParsing.varType.string,
                   "tag info about geometry database conditions")
@@ -146,19 +163,19 @@ options.register ('tracker',
                   "write Tracker geometry")
 
 options.register ('muon',
-                  True, # default value
+                  False, # default value
                   VarParsing.VarParsing.multiplicity.singleton,
                   VarParsing.VarParsing.varType.bool,
                   "write Muon geometry")
 
 options.register ('calo',
-                  True, # default value
+                  False, # default value
                   VarParsing.VarParsing.multiplicity.singleton,
                   VarParsing.VarParsing.varType.bool,
                   "write Calo geometry")
 
 options.register ('timing',
-                  False, # default value
+                  True, # default value
                   VarParsing.VarParsing.multiplicity.singleton,
                   VarParsing.VarParsing.varType.bool,
                   "write Timing geometry")
@@ -171,14 +188,14 @@ options.register ('out',
 
 options.parseArguments()
 
-
-
-
 process = cms.Process("DUMP")
+
 process.add_(cms.Service("InitRootHandlers", ResetRootErrHandler = cms.untracked.bool(False)))
 process.source = cms.Source("EmptySource")
+# NOTE IMPORTANT. Otherwise we assume Run = 1 and pick up some bad/old geometry
+# for example, was getting 3 pixel layers in barrel for 2018 instead of 4
+process.source.firstRun = cms.untracked.uint32(310000) 
 process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1))
-
 
 recoGeoLoad(options.tag)
 

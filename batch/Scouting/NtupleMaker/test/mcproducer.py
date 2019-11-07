@@ -14,27 +14,37 @@ process.load('Configuration.StandardSequences.MagneticField_AutoFromDBCurrent_cf
 
 ## ----------------- Global Tag ------------------
 process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_condDBv2_cff')
-process.GlobalTag.globaltag = "101X_dataRun2_HLT_v7" # from edmProvDump
-# process.GlobalTag.globaltag = "102X_upgrade2018_realistic_v15"
+# process.GlobalTag.globaltag = "101X_dataRun2_HLT_v7" # from edmProvDump
+process.GlobalTag.globaltag = "102X_upgrade2018_realistic_v15"
 
 process.maxEvents = cms.untracked.PSet(
     # input = cms.untracked.int32(-1)
-    input = cms.untracked.int32(20000)
+    # input = cms.untracked.int32(20000)
+    input = cms.untracked.int32(-1)
+    # input = cms.untracked.int32(1000)
 )
-process.MessageLogger.cerr.FwkReport.reportEvery = 5000
+process.MessageLogger.cerr.FwkReport.reportEvery = 2000
+
+import glob
+# fnames = glob.glob("/hadoop/cms/store/user/namin/DisplacedMuons/2018/GluGluTo0PHH125ToZprimeZprimeTo2Mu2X_CTauVprime_50mm/PREMIX-RAWSIM/*.root")
+fnames = glob.glob("/hadoop/cms/store/user/namin/DisplacedMuons/2018/GluGluTo0PHH125ToZprimeZprimeTo2Mu2X_CTauVprime_5mm/PREMIX-RAWSIM/*.root")
+fnames = ["file:"+fname for fname in fnames]
 
 # Input source
 process.source = cms.Source("PoolSource",
     dropDescendantsOfDroppedBranches = cms.untracked.bool(True),
-    fileNames = cms.untracked.vstring('file:/hadoop/cms/store/user/namin/nanoaod/ScoutingCaloMuon__Run2018C-v1/6A94C331-F38D-E811-B4D7-FA163E146D61.root'),
+    # fileNames = cms.untracked.vstring('file:/hadoop/cms/store/user/namin/nanoaod/ScoutingCaloMuon__Run2018C-v1/6A94C331-F38D-E811-B4D7-FA163E146D61.root'),
     # fileNames = cms.untracked.vstring('file:/home/users/namin/2019/scouting/repo/reco/output_rawsim_5k.root'),
     # fileNames = cms.untracked.vstring('file:/hadoop/cms/store/user/namin/DisplacedMuons/2018/GluGluTo0PHH125ToZprimeZprimeTo2Mu2X_CTauVprime_20mm/PREMIX-RAWSIM/premixraw_1230385_slimmed.root'),
+    fileNames = cms.untracked.vstring(fnames),
     # fileNames = cms.untracked.vstring('/store/data/Run2018B/ScoutingCaloMuon/RAW/v1/000/317/696/00000/761E614C-156E-E811-B5AA-FA163E373C99.root'),
     inputCommands = cms.untracked.vstring(
         'keep *', 
         'drop *_hltScoutingTrackPacker_*_*', 
     ),
 )
+process.source.duplicateCheckMode = cms.untracked.string('noDuplicateCheck')
+do_skim = False
 
 process.out = cms.OutputModule("PoolOutputModule",
     fileName = cms.untracked.string('file:output.root'),
@@ -46,10 +56,19 @@ process.out = cms.OutputModule("PoolOutputModule",
         'drop *_hltFEDSelectorL1_*_*', 
         'drop FEDRawDataCollection_*_*_*',
         'drop *_gtStage2Digis_*_*', 
+        'drop *_hltTriggerSummaryAOD_*_*',
+        'drop *_hltScoutingPFPacker_*_*',
+        'drop *_addPileupInfo_*_*',
+        'drop recoGenJets_*_*_*',
+        'drop *_randomEngineStateProducer_*_*',
+        'drop *_simMuonCSCDigis_*_*',
+        'drop *_simMuonDTDigis_*_*',
+        'drop *_simMuonGEMDigis_*_*',
         ),
      basketSize = cms.untracked.int32(128*1024), # 128kb basket size instead of ~30kb default
 )
 process.outpath = cms.EndPath(process.out)
+
 
 
 # process.options = cms.untracked.PSet(
@@ -70,6 +89,8 @@ process.countvtx = cms.EDFilter("ScoutingVertexCountFilter",
     src = cms.InputTag("hltScoutingMuonPackerCalo","displacedVtx"),
     minNumber = cms.uint32(1)
 )
+
+
 
 L1Info = ["L1_DoubleMu0", "L1_DoubleMu0_Mass_Min1", "L1_DoubleMu0_OQ",
  "L1_DoubleMu0_SQ", "L1_DoubleMu0_SQ_OS", "L1_DoubleMu0er1p4_SQ_OS_dR_Max1p4",
@@ -92,6 +113,8 @@ L1Info = ["L1_DoubleMu0", "L1_DoubleMu0_Mass_Min1", "L1_DoubleMu0_OQ",
  "L1_TripleMu_5_4_2p5_DoubleMu_5_2p5_OS_Mass_5to17", "L1_TripleMu_5_5_3",
  "L1_ZeroBias"]
 
+############define here the HLT trigger paths to monitor: Alias, TriggerSelection and Duplicates
+           #Scouting
 HLTInfo = [
            ['CaloJet40_CaloBTagScouting',        'DST_CaloJet40_CaloBTagScouting_v*'],
            ['CaloScoutingHT250',                 'DST_HT250_CaloScouting_v*'],
@@ -125,4 +148,7 @@ process.triggerMaker = cms.EDProducer("TriggerMaker",
 process.load("EventFilter.L1TRawToDigi.gtStage2Digis_cfi")
 process.gtStage2Digis.InputLabel = cms.InputTag( "hltFEDSelectorL1" )
 
-process.skimpath = cms.Path(process.countmu * process.countvtx * process.gtStage2Digis * process.triggerMaker)
+if do_skim:
+    process.skimpath = cms.Path(process.countmu * process.countvtx * process.gtStage2Digis * process.triggerMaker)
+else:
+    process.skimpath = cms.Path(process.gtStage2Digis * process.triggerMaker)

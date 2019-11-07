@@ -41,7 +41,6 @@ def save_one(fname_in,fname_out):
                 ":EventAuxiliary.run()"
                 ":EventAuxiliary.luminosityBlock()","","goff")
         t1 = time.time()
-        # print(N, t1-t0)
 
         vx0 = ch.GetVal(0)
         vy0 = ch.GetVal(1)
@@ -68,29 +67,34 @@ def save_one(fname_in,fname_out):
         fh.write(buff)
 
     return True
-    # return dict_to_csv
-    # print("x,y,z,run,lumi")
-
-
 
 
 if __name__ == "__main__":
 
-    # fnames = ["root://cmsxrootd.fnal.gov//store/data/Run2018C/MET/MINIAOD/17Sep2018-v1/100000/2E6BCD18-5138-7340-B7A8-1CB666726AB4.root"]
-
     executor = concurrent.futures.ProcessPoolExecutor(12)
 
     import dis_client as dis
+
+    # files = (
+    #         dis.query("/MET/Run2018A-17Sep2018-v1/MINIAOD",typ="files",detail=True)["payload"]
+    #         + dis.query("/MET/Run2018B-17Sep2018-v1/MINIAOD",typ="files",detail=True)["payload"]
+    #         + dis.query("/MET/Run2018C-17Sep2018-v1/MINIAOD",typ="files",detail=True)["payload"]
+    #         + dis.query("/MET/Run2018D-PromptReco-v2/MINIAOD",typ="files",detail=True)["payload"]
+    #         )
+    # outdir = "outputs_full2018/"
+
     files = (
-            dis.query("/MET/Run2018A-17Sep2018-v1/MINIAOD",typ="files",detail=True)["payload"]
-            + dis.query("/MET/Run2018B-17Sep2018-v1/MINIAOD",typ="files",detail=True)["payload"]
-            + dis.query("/MET/Run2018C-17Sep2018-v1/MINIAOD",typ="files",detail=True)["payload"]
-            + dis.query("/MET/Run2018D-PromptReco-v2/MINIAOD",typ="files",detail=True)["payload"]
+            dis.query("/MET/Run2017B-31Mar2018-v1/MINIAOD",typ="files",detail=True)["payload"]
+            + dis.query("/MET/Run2017C-31Mar2018-v1/MINIAOD",typ="files",detail=True)["payload"]
+            + dis.query("/MET/Run2017D-31Mar2018-v1/MINIAOD",typ="files",detail=True)["payload"]
+            + dis.query("/MET/Run2017E-31Mar2018-v1/MINIAOD",typ="files",detail=True)["payload"]
+            + dis.query("/MET/Run2017F-31Mar2018-v1/MINIAOD",typ="files",detail=True)["payload"]
             )
+    outdir = "outputs_full2017/"
+
     fnames = [f["name"] for f in files if f["nevents"]>0]
     print(len(fnames))
 
-    outdir = "outputs_full2018/"
     os.system("mkdir -p {}".format(outdir))
 
     futures = []
@@ -98,7 +102,6 @@ if __name__ == "__main__":
     for fname in tqdm(fnames):
         fname_out = outdir+"/"+fname.split("/store/data/",1)[1].replace("/","_").replace(".root",".csv")
         if os.path.exists(fname_out): continue
-        # save_one(fname,fname_out)
         executor.submit(save_one,fname,fname_out)
 
     for future in tqdm(concurrent.futures.as_completed(futures),total=len(futures)):

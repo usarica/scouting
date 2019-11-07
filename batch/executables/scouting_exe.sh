@@ -118,7 +118,8 @@ echo -e "\n--- begin running ---\n" #                           <----- section d
 
 chirp ChirpMetisStatus "before_script"
 
-python slim_and_skim.py $INPUTFILENAMES --output ${OUTPUTNAME}.root
+EXTRAARGS="$(getjobad metis_extraargs)"
+python babymaker.py $INPUTFILENAMES --output ${OUTPUTNAME}.root ${EXTRAARGS}
 SCRIPT_STATUS=$?
 
 chirp ChirpMetisStatus "after_script"

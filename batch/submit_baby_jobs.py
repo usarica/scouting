@@ -7,7 +7,7 @@ import time
 
 import numpy as np
 
-def main():
+def submit(info):
     total_summary = {}
 
     extra_requirements = "True"
@@ -19,32 +19,28 @@ def main():
     if blacklisted_machines:
         extra_requirements = " && ".join(map(lambda x: '(TARGET.Machine != "{0}")'.format(x),blacklisted_machines))
 
-    # for era in ["B"]:
-    # for era in ["B","C"]:
-    for era in ["A","B","C","D"]:
-        extra = {}
-        # if era == "D":
-        #     extra = dict(open_dataset=True)
+    for reqname,tag,extra_args in info:
+        extra_args = ""
         task = CondorTask(
                 sample = DirectorySample(
-                    location = "/hadoop/cms/store/user/namin/ScoutingCaloMuon/crab_skim_2018{}/190919_*/0000/".format(era),
-                    dataset = "/ScoutingCaloMuon/Run2018{}-v1/RAW".format(era)
+                    location = "/hadoop/cms/store/user/namin/ScoutingCaloMuon/crab_{}/*/*/".format(reqname),
+                    dataset = "/ScoutingCaloMuon/Run2018{}/RAW".format(reqname)
                     ),
                 output_name = "output.root",
                 executable = "executables/scouting_exe.sh",
                 tarfile = "package.tar.gz",
-                MB_per_output = 3000,
+                MB_per_output = 4000,
                 condor_submit_params = {
-                    "sites":"T2_US_UCSD",  # I/O is hella faster
-                    "classads": [ 
-                        ["JobBatchName","scouting_2018{}".format(era)],
+                    "sites":"T2_US_UCSD",
+                    "classads": [
+                        ["metis_extraargs",extra_args],
+                        ["JobBatchName",reqname],
                         ],
                     "requirements_line": 'Requirements = ((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true) && {extra_requirements})'.format(extra_requirements=extra_requirements),
                     },
                 cmssw_version = "CMSSW_10_2_5",
                 scram_arch = "slc6_amd64_gcc700",
-                tag = "v3",
-                **extra
+                tag = tag,
                 )
 
         task.process()
@@ -56,5 +52,18 @@ def main():
 
 if __name__ == "__main__":
 
-    main()
+    print("Did you do `./make_tar.sh`? Sleeping for 5s for you to quit if not.")
+    time.sleep(5)
+
+    # Entries of [CRAB request name, output baby tag, extra string passed to babymaker]
+    info = [
+            # ["skim_2018A_v4","v4", ""],
+            # ["skim_2018B_v4","v4", ""],
+            # ["skim_2018C_v4","v4", ""],
+            # ["skim_2018D_v4","v4", ""],
+            # ["skim_2018C_v4_unblind1fb","v4", ""],
+
+            ["skim_2018C_v4_unblind1fb","vtestskim1cm", "--skim1cm"],
+            ]
+    submit(info)
 

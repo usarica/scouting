@@ -2,9 +2,15 @@
 
 ### Info
 
-The gridpack in `gridpacks/gridpack.tar.gz` produces ggH(125) to ZdZd to 2mu+2X. We run the GENSIM and PREMIXRAW steps, keeping
-the scouting outputs, and subsequently run the slimmer from `../batch/Scouting/NtupleMaker/test/mcproducer.py` to embed L1 branches, while
-keeping the EDM structure of the file. We will want to run the babymaker on the output of this submission.
+The gridpack in `gridpacks/gridpack.tar.gz` produces ggH(125) to ZdZd to
+2mu+2X. We run the GENSIM and PREMIXRAW steps, keeping the scouting outputs,
+and subsequently run the slimmer from
+`../batch/Scouting/NtupleMaker/test/mcproducer.py` to embed L1 branches, while
+keeping the EDM structure of the file. Each dataset/task consists of one value
+of (mass,ctau). The mass and ctau parameters in the `JHUGen.input` file of the
+gridpack are modified on the worker node.
+
+We will eventually want to run the babymaker on the outputs of these submission.
 
 ### Submission
 

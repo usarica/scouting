@@ -4,20 +4,17 @@ OUTPUTDIR=$1
 OUTPUTNAME=$2
 INPUTFILENAMES=$3
 IFILE=$4
-PSET=$5
-CMSSWVERSION=$6
-SCRAMARCH=$7
-NEVTS=$8
+CMSSWVERSION=$5
+SCRAMARCH=$6
 
-# FIXME FIXME
-OUTPUTDIR="/hadoop/cms/store/user/namin/metis_test/dimuon/"
-OUTPUTNAME="output"
-INPUTFILENAMES="dummy"
-IFILE="15"
-PSET="dummy"
-CMSSWVERSION="dummy"
-SCRAMARCH="slc6_amd64_gcc700"
-NEVTS="20"
+# # FIXME FIXME
+# OUTPUTDIR="/hadoop/cms/store/user/namin/metis_test/dimuon/"
+# OUTPUTNAME="output"
+# INPUTFILENAMES="dummy"
+# IFILE="15"
+# CMSSWVERSION="dummy"
+# SCRAMARCH="slc6_amd64_gcc700"
+# NEVENTS="2"
 
 # Make sure OUTPUTNAME doesn't have .root since we add it manually
 OUTPUTNAME=$(echo $OUTPUTNAME | sed 's/\.root//')
@@ -135,13 +132,14 @@ function edit_psets {
     gridpack="$1"
     seed=$2
     nevents=$3
+    absgridpack=$(readlink -f "$gridpack")
 
     # gensim
     echo "process.RandomNumberGeneratorService.externalLHEProducer.initialSeed = $seed" >> $gensimcfg
-    echo "process.externalLHEProducer.args = [\"$gridpack\"]" >> $gensimcfg
+    echo "process.externalLHEProducer.args = [\"$absgridpack\"]" >> $gensimcfg
     echo "process.externalLHEProducer.nEvents = $nevents" >> $gensimcfg
     echo "process.maxEvents.input = $nevents" >> $gensimcfg
-    echo "process.source.firstLuminosityBlock = cms.uint32($seed)" >> $gensimcfg
+    echo "process.source.firstLuminosityBlock = cms.untracked.uint32($seed)" >> $gensimcfg
     echo "process.RAWSIMoutput.fileName = \"file:output_gensim.root\"" >> $gensimcfg
 
     # rawsim
@@ -166,15 +164,23 @@ function edit_psets {
 
 }
 
+function setup_slimmer {
+    pushd .
+    cp -rp Scouting/ $CMSSW_BASE/src
+    cd $CMSSW_BASE/src
+    scram b -j1
+    popd
+}
+
+
+
 echo -e "\n--- begin header output ---\n" #                     <----- section division
 echo "OUTPUTDIR: $OUTPUTDIR"
 echo "OUTPUTNAME: $OUTPUTNAME"
 echo "INPUTFILENAMES: $INPUTFILENAMES"
 echo "IFILE: $IFILE"
-echo "PSET: $PSET"
 echo "CMSSWVERSION: $CMSSWVERSION"
 echo "SCRAMARCH: $SCRAMARCH"
-echo "NEVTS: $NEVTS"
 
 echo "GLIDEIN_CMSSite: $GLIDEIN_CMSSite"
 echo "hostname: $(hostname)"
@@ -184,10 +190,14 @@ echo "args: $@"
 echo "tag: $(getjobad tag)"
 echo "taskname: $(getjobad taskname)"
 
+MASS=$(getjobad param_mass)
+CTAU=$(getjobad param_ctau)
+NEVENTS=$(getjobad param_nevents)
+echo "MASS: $MASS"
+echo "CTAU: $CTAU"
+
 echo -e "\n--- end header output ---\n" #                       <----- section division
 
-MASS="10"
-CTAU="25"
 
 gridpack="gridpacks/gridpack.tar.gz"
 gensimcfg="psets/2018/gensim_cfg.py"
@@ -207,7 +217,7 @@ cp ../*.gz .
 tar xf *.gz
 
 edit_gridpack $gridpack $MASS $CTAU
-edit_psets $gridpack $IFILE $NEVTS
+edit_psets $gridpack $IFILE $NEVENTS
 
 echo "before running: ls -lrth"
 ls -lrth
@@ -220,6 +230,7 @@ setup_cmssw CMSSW_10_2_3 slc6_amd64_gcc700
 cmsRun $gensimcfg
 setup_cmssw CMSSW_10_2_5 slc6_amd64_gcc700 
 cmsRun $rawsimcfg
+setup_slimmer
 cmsRun $slimmercfg
 CMSRUN_STATUS=$?
 

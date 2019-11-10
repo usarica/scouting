@@ -291,8 +291,6 @@ class Looper(object):
         make_branch("GenMuon_pdgId", "vi")
         make_branch("GenMuon_motherId", "vi")
 
-        make_branch("Gen_nMuFromZ", "i")
-
         make_branch("BS_x", "f")
         make_branch("BS_y", "f")
         make_branch("BS_z", "f")
@@ -512,7 +510,7 @@ class Looper(object):
                 branches["Muon_pt"].push_back(muon.pt())
                 branches["Muon_eta"].push_back(muon.eta())
                 branches["Muon_phi"].push_back(muon.phi())
-                branches["Muon_m"].push_back(muon.m())
+                branches["Muon_m"].push_back(0.10566) # hardcode since otherwise we get 0.
                 branches["Muon_trackIso"].push_back(muon.trackIso())
                 branches["Muon_chi2"].push_back(muon.chi2())
                 branches["Muon_ndof"].push_back(muon.ndof())

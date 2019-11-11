@@ -5,6 +5,7 @@ import ROOT as r
 from tqdm import tqdm
 
 import array
+import glob
 import math
 import time
 import argparse
@@ -22,6 +23,8 @@ def xrootdify(fname):
 class Looper(object):
 
     def __init__(self,fnames=[], output="output.root", nevents=-1, expected=-1, skim1cm=False, allevents=False, treename="Events"):
+        if any("*" in x for x in fnames):
+            fnames = sum(map(glob.glob,fnames),[])
         self.fnames = map(xrootdify,sum(map(lambda x:x.split(","),fnames),[]))
         self.nevents = nevents
         self.do_skimreco = not allevents

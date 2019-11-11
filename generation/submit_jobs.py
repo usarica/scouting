@@ -5,6 +5,8 @@ from metis.StatsParser import StatsParser
 from metis.Optimizer import Optimizer
 import time
 
+import itertools
+
 def submit():
     total_summary = {}
 
@@ -17,38 +19,19 @@ def submit():
     if blacklisted_machines:
         extra_requirements = " && ".join(map(lambda x: '(TARGET.Machine != "{0}")'.format(x),blacklisted_machines))
 
+    # Edit these parameters.
+    # in total, there will be `len(masses)*len(ctaus)*events_per_point` events
     tag = "v1"
-    # total_events = 50000
-    # events_per_job = 500
-    total_events = 100000
+    events_per_point = 100000
     events_per_job = 500
-    for mass,ctau in [
-            [5,10],
-            [5,25],
-            [5,50],
-            [8,10],
-            [8,25],
-            [8,50],
-            [10,10],
-            [10,25],
-            [10,50],
-            [12,10],
-            [12,25],
-            [12,50],
-            [15,10],
-            [15,25],
-            [15,50],
-            [18,10],
-            [18,25],
-            [18,50],
-            [20,10],
-            [20,25],
-            [20,50],
-            ]:
+    masses = [5,8,10,12,15,18,20,25]
+    ctaus = [10,25,50]
+
+    for mass,ctau in itertools.product(masses,ctaus):
         reqname = "mzd{}_ctau{}_{}".format(mass,ctau,tag)
-        njobs = total_events//events_per_job
+        njobs = events_per_point//events_per_job
         task = CondorTask(
-                sample = DummySample(dataset="/HToZdZdTo2Mu2X/params_mzd{}_ctau{}mm/RAWSIM".format(mass,ctau),N=njobs,nevents=total_events),
+                sample = DummySample(dataset="/HToZdZdTo2Mu2X/params_mzd{}_ctau{}mm/RAWSIM".format(mass,ctau),N=njobs,nevents=events_per_point),
                 output_name = "output.root",
                 executable = "executables/condor_executable.sh",
                 tarfile = "package.tar.gz",

@@ -368,7 +368,7 @@ class Looper(object):
                     branches["{}".format(name)][0] = bit
                     branches["{}_prescale".format(name)][0] = max(prescale,0)
                 d = dict(zip(l1names,l1results))
-                branches["pass_l1"][0] = d["L1_DoubleMu4p5_SQ_OS_dR_Max1p2"] or d["L1_DoubleMu_15_5_SQ"] or d["L1_DoubleMu_15_7"]
+                branches["pass_l1"][0] = d["L1_DoubleMu4p5_SQ_OS_dR_Max1p2"] or d["L1_DoubleMu0er1p4_SQ_OS_dR_Max1p4"] or d["L1_DoubleMu_15_7"]
 
 
             run = int(evt.EventAuxiliary.run())

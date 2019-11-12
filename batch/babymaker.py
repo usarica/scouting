@@ -162,6 +162,7 @@ class Looper(object):
         make_branch("pass_skim", "b")
         make_branch("pass_l1", "b")
         make_branch("pass_fiducialgen", "b")
+        make_branch("pass_fiducialgen_norho", "b")
 
         make_branch("MET_pt", "f")
         make_branch("MET_phi", "f")
@@ -458,6 +459,7 @@ class Looper(object):
             nGenPart = 0
             nGenMuon = 0
             nFiducialMuon = 0
+            nFiducialMuon_norho = 0
             for genpart in genparts:
                 pdgid = genpart.pdgId()
                 if abs(pdgid) not in [13,23,25]: continue
@@ -487,12 +489,15 @@ class Looper(object):
                     branches["GenMuon_status"].push_back(genpart.status())
                     branches["GenMuon_pdgId"].push_back(pdgid)
                     branches["GenMuon_motherId"].push_back(motherid)
-                    if (genpart.pt() > 4.) and (abs(genpart.eta()) < 2.4) and (math.hypot(genpart.vx(),genpart.vy())<11.):
-                        nFiducialMuon += 1
+                    if (genpart.pt() > 4.) and (abs(genpart.eta()) < 2.4):
+                        nFiducialMuon_norho += 1
+                        if (math.hypot(genpart.vx(),genpart.vy())<11.):
+                            nFiducialMuon += 1
                     nGenMuon += 1
             branches["nGenPart"][0] = nGenPart
             branches["nGenMuon"][0] = nGenMuon
             branches["pass_fiducialgen"][0] = (nFiducialMuon >= 2) or (not self.is_mc)
+            branches["pass_fiducialgen_norho"][0] = (nFiducialMuon_norho >= 2) or (not self.is_mc)
 
             if self.do_tracks:
                 tracks = evt.ScoutingTracks_hltScoutingTrackPacker__HLT.product()

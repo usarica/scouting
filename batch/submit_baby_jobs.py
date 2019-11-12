@@ -93,8 +93,9 @@ if __name__ == "__main__":
     data_tasks = get_data_tasks(data_info)
 
     mc_tasks = get_mc_tasks(
-            pattern="/hadoop/cms/store/user/namin/ProjectMetis/HToZdZdTo2Mu2X_params_mzd*_ctau*mm_RAWSIM_*/",
-            tag="v4",
+            pattern="/hadoop/cms/store/user/namin/ProjectMetis/HToZdZdTo2Mu2X_params_mzd*_ctau*mm_RAWSIM_v1/",
+            tag="v5",
+            extra_args="--allevents",
             )
 
     for _ in range(500):

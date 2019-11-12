@@ -1,6 +1,8 @@
 import numba
 import numpy as np
 import functools
+import pandas as pd
+import uproot_methods
 
 def set_plotting_style():
     from matplotlib import rcParams
@@ -213,3 +215,33 @@ def plot_overlay_bpix(ax,**kwargs):
         points = points[np.array([6,2,1,5,6])]
         ax.plot(points[:,0],points[:,1],color=color,**kwargs)
     return ax
+
+@pd.api.extensions.register_dataframe_accessor("vec")
+class LorentzVectorAccessor:
+    def __init__(self, pandas_obj):
+        self._validate(pandas_obj)
+        self._obj = pandas_obj
+
+    @staticmethod
+    def _validate(obj):
+        missing_columns = set(["Muon1_pt","Muon1_eta","Muon1_phi","Muon2_pt","Muon2_eta","Muon2_phi"])-set(obj.columns)
+        if len(missing_columns):
+            raise AttributeError("Missing columns: {}".format(missing_columns))
+
+    @property
+    def mu1(self):
+        LV = uproot_methods.TLorentzVectorArray.from_ptetaphim(
+            self._obj["Muon1_pt"],self._obj["Muon1_eta"],self._obj["Muon1_phi"],0.10566,
+        )
+        return LV
+
+    @property
+    def mu2(self):
+        LV = uproot_methods.TLorentzVectorArray.from_ptetaphim(
+            self._obj["Muon2_pt"],self._obj["Muon2_eta"],self._obj["Muon2_phi"],0.10566,
+        )
+        return LV
+
+    @property
+    def dimu(self):
+        return self.mu1 + self.mu2

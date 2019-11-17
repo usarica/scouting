@@ -13,6 +13,10 @@ import os
 import pickle
 import gzip
 
+fast = False
+if fast:
+    print("NOTE: fast option is True, so we will skip some crucial things")
+
 def xrootdify(fname):
     if "/hadoop/cms/store/user/namin/" in fname:
         fname = "root://redirector.t2.ucsd.edu/" + fname.replace("/hadoop/cms","")
@@ -26,10 +30,11 @@ class Looper(object):
         if any("*" in x for x in fnames):
             fnames = sum(map(glob.glob,fnames),[])
         self.fnames = map(xrootdify,sum(map(lambda x:x.split(","),fnames),[]))
+        # print(self.fnames)
         self.nevents = nevents
         self.do_skimreco = not allevents
         self.do_skim1cm = skim1cm
-        self.do_jets = False
+        self.do_jets = True
         self.do_tracks = False
         self.do_trigger = True
         self.is_mc = False
@@ -48,6 +53,8 @@ class Looper(object):
                 2018: {False: {}, True: {}},
                 }
 
+        self.loaded_pixel_code = False
+
         self.init_tree()
         self.init_branches()
 
@@ -65,19 +72,30 @@ class Looper(object):
         branchnames = [b.GetName() for b in ch.GetListOfBranches()]
         self.has_gen_info = any("genParticles" in name for name in branchnames)
         self.is_mc = self.has_gen_info
+        self.has_trigger_info = any("triggerMaker" in name for name in branchnames)
+
+        if not self.has_trigger_info:
+            print("[!] Didn't find trigger branches. Saving dummy trigger information.")
+            self.do_trigger = False
 
         ch.SetBranchStatus("*",0)
         ch.SetBranchStatus("*hltScoutingMuonPackerCalo*",1)
         ch.SetBranchStatus("*hltScoutingCaloPacker*",1)
-        if self.do_tracks:
-            ch.SetBranchStatus("*hltScoutingTrackPacker*",1)
         ch.SetBranchStatus("*hltScoutingPrimaryVertexPacker*",1)
         ch.SetBranchStatus("*EventAuxiliary*",1)
-        ch.SetBranchStatus("*triggerMaker*",1)
-        ch.SetBranchStatus("*genParticles*",1)
+        if self.do_tracks:
+            ch.SetBranchStatus("*hltScoutingTrackPacker*",1)
+        if self.has_trigger_info:
+            ch.SetBranchStatus("*triggerMaker*",1)
+        if self.has_gen_info:
+            ch.SetBranchStatus("*genParticles*",1)
 
         self.outfile = r.TFile(self.fname_out, "recreate")
         self.outtree = r.TTree(self.treename,"")
+
+        cachesize = 30000000
+        ch.SetCacheSize(cachesize)
+        ch.SetCacheLearnEntries(250)
 
     def make_branch(self, name, tstr="vi"):
         extra = []
@@ -124,6 +142,7 @@ class Looper(object):
             print("Finished loading {} rows in {:.1f} seconds".format(len(data),t1-t0))
 
     def get_bs(self, run, lumi, year=2018):
+        if fast: return 0., 0., 0.
         if self.is_mc: run,lumi = 0,0
         if not self.bs_data[year][self.is_mc]:
             self.load_bs_data(year=year)
@@ -134,8 +153,10 @@ class Looper(object):
             print("WARNING: Couldn't find (run={},lumi={},is_mc={},year={}) in beamspot lookup data. Falling back to the total mean: {}".format(run,lumi,self.is_mc,year,xyz))
         return xyz
 
-    def in_pixel_rectangles(self,x,y,z):
+    def in_pixel_rectangles_rough(self,x,y,z):
+        if fast: return False
         rho = math.hypot(x,y)
+        if (rho < 2.0): return False
         boxes = [
             [[2.5,3.5],[-23,23]],
             [[6.3,7.4],[-27,27]],
@@ -150,6 +171,28 @@ class Looper(object):
             if (rholow < rho < rhohigh) and (zlow < z < zhigh):
                 return True
         return False
+
+    def load_pixel_code(self):
+        if not self.loaded_pixel_code:
+            print("Loading pixel utilities and lookup tables")
+            t0 = time.time()
+            r.gROOT.ProcessLine(".L data/calculate_pixel.cc")
+            self.loaded_pixel_code = True
+            t1 = time.time()
+            print("Finished loading in {:.1f} seconds".format(t1-t0))
+
+    def in_pixel_rectangles(self,px,py,pz):
+        if fast: return False
+        self.load_pixel_code()
+        rho = math.hypot(px,py)
+        if (rho < 2.0): return False
+        return r.is_point_in_any_module(px, py, pz)
+
+    def calculate_module_crosses(self, vx, vy, vz, px, py, pz):
+        if fast: return False
+        self.load_pixel_code()
+        return r.calculate_module_crosses(vx, vy, vz, px, py, pz)
+
 
     def init_branches(self):
 
@@ -185,6 +228,7 @@ class Looper(object):
         make_branch("DV_rho", "vf")
         make_branch("DV_rhoCorr", "vf")
         make_branch("DV_inPixelRectangles", "vb")
+        make_branch("DV_inPixelRectanglesRough", "vb")
 
         if self.do_jets:
             make_branch("nJet", "i")
@@ -265,11 +309,14 @@ class Looper(object):
         make_branch("Muon_trk_dsz", "vf")
         make_branch("Muon_trk_dszError", "vf")
         make_branch("Muon_vtxNum","vi")
-        make_branch("Muon_vtxIndx1","vi")
+        make_branch("Muon_vtxIdx1","vi")
         make_branch("Muon_vx", "vf")
         make_branch("Muon_vy", "vf")
         make_branch("Muon_vz", "vf")
         make_branch("Muon_dxyCorr", "vf")
+        make_branch("Muon_nExpectedPixelHits", "vi")
+        make_branch("Muon_jetIdx1", "vi")
+        make_branch("Muon_jetIdx2", "vi")
 
         make_branch("nGenPart", "i")
         make_branch("GenPart_pt", "vf")
@@ -316,6 +363,8 @@ class Looper(object):
         tprev = time.time()
         nprev = 0
         for evt in ch:
+            # if (ievt-1) % 1000 == 0:
+            #     ch.GetTree().PrintCacheStats()
             if (ievt-1) % 1000 == 0:
                 nnow = ievt
                 tnow = time.time()
@@ -344,7 +393,6 @@ class Looper(object):
             # sort muons in descending pT (turns out a nontrivial amount are not sorted already, like 5%-10% I think)
             muons = sorted(muons, key=lambda x:-x.pt())
 
-            self.do_trigger = True
             if self.do_trigger:
                 hltresults = map(bool,evt.bools_triggerMaker_hltresult_SLIM.product())
                 hltnames = list(evt.Strings_triggerMaker_hltname_SLIM.product())
@@ -369,6 +417,8 @@ class Looper(object):
                     branches["{}_prescale".format(name)][0] = max(prescale,0)
                 d = dict(zip(l1names,l1results))
                 branches["pass_l1"][0] = d["L1_DoubleMu4p5_SQ_OS_dR_Max1p2"] or d["L1_DoubleMu0er1p4_SQ_OS_dR_Max1p4"] or d["L1_DoubleMu_15_7"]
+            else:
+                branches["pass_l1"][0] = True
 
 
             run = int(evt.EventAuxiliary.run())
@@ -406,6 +456,7 @@ class Looper(object):
                 branches["DV_rho"].push_back(rho)
                 branches["DV_rhoCorr"].push_back(rhoCorr)
                 branches["DV_inPixelRectangles"].push_back(self.in_pixel_rectangles(vx,vy,vz))
+                branches["DV_inPixelRectanglesRough"].push_back(self.in_pixel_rectangles_rough(vx,vy,vz))
             branches["nDV"][0] = len(dvs)
 
             for pv in pvs:
@@ -430,6 +481,12 @@ class Looper(object):
 
             if self.do_jets:
                 jets = evt.ScoutingCaloJets_hltScoutingCaloPacker__HLT.product()
+                # before = ",".join(["{:.1f}".format(jet.pt()) for jet in jets])
+                jets = sorted(jets, key=lambda x:-x.pt())
+                # after = ",".join(["{:.1f}".format(jet.pt()) for jet in jets])
+                # print("before:",before)
+                # print("after: ",after)
+                jet_etaphis = []
                 for jet in jets:
                     branches["Jet_pt"].push_back(jet.pt())
                     branches["Jet_eta"].push_back(jet.eta())
@@ -447,6 +504,7 @@ class Looper(object):
                     branches["Jet_towersArea"].push_back(jet.towersArea())
                     branches["Jet_mvaDiscriminator"].push_back(jet.mvaDiscriminator())
                     branches["Jet_btagDiscriminator"].push_back(jet.btagDiscriminator())
+                    jet_etaphis.append((jet.eta(),jet.phi()))
                 branches["nJet"][0] = len(jets)
 
             if self.has_gen_info:
@@ -515,9 +573,12 @@ class Looper(object):
                     branches["Track_nValidStripHits"].push_back(track.tk_nValidStripHits())
 
             for muon in muons:
-                branches["Muon_pt"].push_back(muon.pt())
-                branches["Muon_eta"].push_back(muon.eta())
-                branches["Muon_phi"].push_back(muon.phi())
+                pt = muon.pt()
+                eta = muon.eta()
+                phi = muon.phi()
+                branches["Muon_pt"].push_back(pt)
+                branches["Muon_eta"].push_back(eta)
+                branches["Muon_phi"].push_back(phi)
                 branches["Muon_m"].push_back(0.10566) # hardcode since otherwise we get 0.
                 branches["Muon_trackIso"].push_back(muon.trackIso())
                 branches["Muon_chi2"].push_back(muon.chi2())
@@ -543,12 +604,23 @@ class Looper(object):
                 branches["Muon_trk_dsz"].push_back(muon.trk_dsz())
                 branches["Muon_trk_dszError"].push_back(muon.trk_dszError())
 
+                jetIdx1 = -1
+                jetIdx2 = -1
+                if self.do_jets:
+                    # find index of jet that is closest to this muon
+                    sorted_etaphis = sorted(zip(range(len(jet_etaphis)), jet_etaphis), key=lambda x: math.hypot(eta-x[1][0], phi-x[1][1]))
+                    if len(sorted_etaphis) > 0: jetIdx1 = sorted_etaphis[0][0]
+                    if len(sorted_etaphis) > 1: jetIdx2 = sorted_etaphis[1][0]
+                branches["Muon_jetIdx1"].push_back(jetIdx1)
+                branches["Muon_jetIdx2"].push_back(jetIdx2)
+
+
                 indices = muon.vtxIndx()
                 num = len(indices)
                 # branches["Muon_vtxIndx"].push_back(indices)
                 branches["Muon_vtxNum"].push_back(num)
-                if num > 0: branches["Muon_vtxIndx1"].push_back(indices[0])
-                else: branches["Muon_vtxIndx1"].push_back(-1)
+                if num > 0: branches["Muon_vtxIdx1"].push_back(indices[0])
+                else: branches["Muon_vtxIdx1"].push_back(-1)
 
                 dxy = muon.dxy()
 
@@ -572,6 +644,9 @@ class Looper(object):
                 branches["Muon_vy"].push_back(vy)
                 branches["Muon_vz"].push_back(vz)
                 branches["Muon_dxyCorr"].push_back(dxyCorr)
+                vmu = r.TLorentzVector()
+                vmu.SetPtEtaPhiM(muon.pt(), muon.eta(), muon.phi(), 0.10566)
+                branches["Muon_nExpectedPixelHits"].push_back(self.calculate_module_crosses(vx,vy,vz,vmu.Px(),vmu.Py(),vmu.Pz()))
             branches["nMuon"][0] = len(muons)
 
 
@@ -581,7 +656,7 @@ class Looper(object):
                 v1.SetPtEtaPhiM(muons[0].pt(), muons[0].eta(), muons[0].phi(), muons[0].m())
                 v2.SetPtEtaPhiM(muons[1].pt(), muons[1].eta(), muons[1].phi(), muons[1].m())
                 branches["LeadingPair_mass"][0] = (v1+v2).M()
-                branches["LeadingPair_sameVtx"][0] = (branches["Muon_vtxIndx1"][0]>=0) and (branches["Muon_vtxIndx1"][0] == branches["Muon_vtxIndx1"][1])
+                branches["LeadingPair_sameVtx"][0] = (branches["Muon_vtxIdx1"][0]>=0) and (branches["Muon_vtxIdx1"][0] == branches["Muon_vtxIdx1"][1])
                 branches["LeadingPair_isOS"][0] = (branches["Muon_charge"][0] == -branches["Muon_charge"][1])
             else:
                 branches["LeadingPair_mass"][0] = 0.

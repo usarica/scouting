@@ -109,10 +109,15 @@ def numba_histogram2d(ax,ay, bins_x, bins_y, weights=None,overflow=False):
 def make_profile(tobin,toreduce,edges=None,errors=True):
     from scipy.stats import binned_statistic
     yvals = binned_statistic(tobin,toreduce, 'mean', bins=edges).statistic
-    yerr = None
+    yerr = yvals*0.
     if errors:
         yerr = binned_statistic(tobin,toreduce, 'std', bins=edges).statistic/binned_statistic(tobin,toreduce, 'count', bins=edges).statistic**0.5
-    return yvals, yerr
+    from yahist import Hist1D
+    h = Hist1D()
+    h._counts = yvals
+    h._errors = yerr
+    h._edges = edges
+    return h
 
 
 @functools.lru_cache(maxsize=256)

@@ -15,6 +15,7 @@ def submit():
              "cabinet-4-4-29.t2.ucsd.edu",
              "cabinet-7-7-36.t2.ucsd.edu",
              "cabinet-8-8-1.t2.ucsd.edu",
+             "sdsc-37.t2.ucsd.edu",
              ]
     if blacklisted_machines:
         extra_requirements = " && ".join(map(lambda x: '(TARGET.Machine != "{0}")'.format(x),blacklisted_machines))
@@ -22,10 +23,17 @@ def submit():
     # Edit these parameters.
     # in total, there will be `len(masses)*len(ctaus)*events_per_point` events
     tag = "v1"
-    events_per_point = 100000
+
+    # events_per_point = 100000
+    # events_per_job = 500
+    # masses = [5,8,10,12,15,18,20,25]
+    # ctaus = [10,25,50]
+
+    # 5x the events for this particular point
+    events_per_point = 500000
     events_per_job = 500
-    masses = [5,8,10,12,15,18,20,25]
-    ctaus = [10,25,50]
+    masses = [20]
+    ctaus = [50]
 
     for mass,ctau in itertools.product(masses,ctaus):
         reqname = "mzd{}_ctau{}_{}".format(mass,ctau,tag)
